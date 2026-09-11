@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function admin() {
+      return request.auth != null && request.auth.uid == get(/databases/$(database)/documents/access/admin).data.uid;
+    }
+    function text(data, key, max) { return data[key] is string && data[key].size() <= max; }
+    function optionalText(data, key, max) { return !(key in data) || text(data, key, max); }
+    function url(value) { return value is string && value.size() <= 2048 && value.matches('https://[^@/ ]+(/[^ ]*)?'); }
+    function optionalUrl(data, key) { return !(key in data) || data[key] == '' || url(data[key]); }
+    function projectValid(d, slug) {
+      return d.keys().hasOnly(['slug','order','title','category','categoryLabel','tag','summary','fullDescription','technologies','liveUrl','role','client','timeline','deliverables','status','image','thumbnail','bannerImage','challenge','solution','createdAt','updatedAt'])
+        && d.keys().hasAll(['slug','order','title','category','categoryLabel','tag','summary','technologies','role','status','image','thumbnail','createdAt','updatedAt'])
+        && d.slug == slug && slug.size() <= 80 && slug.matches('[a-z0-9]+(-[a-z0-9]+)*')
+        && d.order is int && d.order >= 0 && d.order <= 9007199254740991
+        && text(d, 'title', 120) && d.title.size() > 0
+        && text(d, 'summary', 600) && d.summary.size() > 0
+        && d.category in ['website','webapp','poster','logo','automation','app']
+        && text(d, 'categoryLabel', 80) && text(d, 'tag', 120) && text(d, 'role', 200)
+        && d.status in ['draft','published'] && url(d.image) && optionalUrl(d, 'thumbnail') && optionalUrl(d, 'bannerImage') && optionalUrl(d, 'liveUrl')
+        && d.technologies is list && d.technologies.size() <= 30
+        && (!('solution' in d) || (d.solution is list && d.solution.size() <= 30))
+        && optionalText(d, 'fullDescription', 10000) && optionalText(d, 'challenge', 10000)
+        && optionalText(d, 'client', 200) && optionalText(d, 'timeline', 200) && optionalText(d, 'deliverables', 1000)
+        && d.createdAt is timestamp && d.updatedAt == request.time;
+    }
+    match /access/admin {
+      allow get: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow list, write: if false;
+    }
+    match /projects/{slug} {
+      allow read: if resource.data.status == 'published' || admin();
+      allow create: if admin() && projectValid(request.resource.data, slug) && request.resource.data.createdAt == request.time;
+      allow update: if admin() && projectValid(request.resource.data, slug) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if admin();
+    }
+    match /settings/public {
+      allow read: if true;
+      allow create, update: if admin()
+        && request.resource.data.keys().hasOnly(['headshot','resumeUrl','availability','bookingsWindow','responseWindow','updatedAt'])
+        && url(request.resource.data.headshot)
+        && text(request.resource.data, 'resumeUrl', 2048)
+        && (request.resource.data.resumeUrl == '' || request.resource.data.resumeUrl == '/resume.pdf' || (url(request.resource.data.resumeUrl) && request.resource.data.resumeUrl.matches('https://.*[.]pdf([?].*)?')))
+        && text(request.resource.data, 'availability', 250) && text(request.resource.data, 'bookingsWindow', 250) && text(request.resource.data, 'responseWindow', 250)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if admin();
+    }
+    match /enquiries/{id} {
+      // Creation goes through /api/enquiries with App Check and rate limiting.
+      allow create: if false;
+      allow read, delete: if admin();
+      allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['new','reviewed','contacted'];
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
