@@ -44,9 +44,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onDuplicateProject,
   onOpenDeleteProject,
   onPreviewProject,
-  onSwitchView, onTogglePublish, onReorder, onEnquiryStatus,
+  onSwitchView,
+  onTogglePublish,
+  onReorder,
+  onEnquiryStatus,
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'enquiries' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'enquiries' | 'settings'>(
+    'dashboard',
+  );
   const [searchQuery, setSearchQuery] = useState('');
 
   const publishedCount = projects.filter((p) => p.status === 'published').length;
@@ -56,7 +61,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     (p) =>
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.technologies.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      p.categoryLabel.toLowerCase().includes(searchQuery.toLowerCase())
+      p.categoryLabel.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -179,7 +184,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       </aside>
 
       {/* Main Dashboard Workspace */}
-      <div className="flex-1 p-6 md:p-10 space-y-8 overflow-y-auto">
+      <div className="flex-1 min-w-0 p-6 md:p-10 space-y-8 overflow-y-auto">
         {/* Top Status Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -208,9 +213,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           {/* Metric 1 */}
           <div className="p-5 rounded-2xl bg-white border border-[#c8c4d8] shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs sm:text-sm text-[#474555] font-medium">
-                Total Projects
-              </span>
+              <span className="text-xs sm:text-sm text-[#474555] font-medium">Total Projects</span>
               <span className="p-2 rounded-lg bg-[#e9edff] text-[#422cd8]">
                 <FolderKanban className="w-4 h-4" />
               </span>
@@ -219,20 +222,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <span className="text-2xl md:text-3xl font-bold text-[#141b2b]">
                 {projects.length}
               </span>
-              <span className="text-xs text-emerald-700 font-semibold">
-                
-              </span>
+              <span className="text-xs text-emerald-700 font-semibold"></span>
             </div>
-            <p className="text-[11px] text-[#474555] mt-1">
-              Catalogued projects on database
-            </p>
+            <p className="text-[11px] text-[#474555] mt-1">Catalogued projects on database</p>
           </div>
 
           {/* Metric 2 */}
           <div className="p-5 rounded-2xl bg-white border border-[#c8c4d8] shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs sm:text-sm text-[#474555] font-medium">
-                Published Live
+                Published Projects
               </span>
               <span className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
                 <Globe className="w-4 h-4" />
@@ -246,25 +245,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 PUBLISHED
               </span>
             </div>
-            <p className="text-[11px] text-[#474555] mt-1">
-              Visible in the public portfolio
-            </p>
+            <p className="text-[11px] text-[#474555] mt-1">Visible in the public portfolio</p>
           </div>
 
           {/* Metric 3 */}
           <div className="p-5 rounded-2xl bg-white border border-[#c8c4d8] shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs sm:text-sm text-[#474555] font-medium">
-                Draft Entries
-              </span>
+              <span className="text-xs sm:text-sm text-[#474555] font-medium">Draft Entries</span>
               <span className="p-2 rounded-lg bg-[#e9edff] text-[#474555]">
                 <FileEdit className="w-4 h-4" />
               </span>
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-2xl md:text-3xl font-bold text-[#141b2b]">
-                {draftCount}
-              </span>
+              <span className="text-2xl md:text-3xl font-bold text-[#141b2b]">{draftCount}</span>
               <span className="text-xs text-[#474555]">
                 {draftCount === 0 ? 'Clean state' : 'In review'}
               </span>
@@ -279,9 +272,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           {/* Metric 4 */}
           <div className="p-5 rounded-2xl bg-white border border-[#c8c4d8] shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs sm:text-sm text-[#474555] font-medium">
-                Active Enquiries
-              </span>
+              <span className="text-xs sm:text-sm text-[#474555] font-medium">Total Enquiries</span>
               <span className="p-2 rounded-lg bg-purple-50 text-purple-600">
                 <Mail className="w-4 h-4" />
               </span>
@@ -290,24 +281,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <span className="text-2xl md:text-3xl font-bold text-[#141b2b]">
                 {enquiries.length}
               </span>
-              <span className="px-2 py-0.5 rounded text-[10px] bg-purple-100 text-purple-800 font-bold">
-                
-              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] bg-purple-100 text-purple-800 font-bold"></span>
             </div>
-            <p className="text-[11px] text-[#474555] mt-1">
-              Received through the contact form
-            </p>
+            <p className="text-[11px] text-[#474555] mt-1">Received through the contact form</p>
           </div>
         </div>
 
         {/* Tab View: Inbound Enquiries */}
-        {activeTab === 'settings' ? <SettingsPanel /> : activeTab === 'enquiries' ? (
+        {activeTab === 'settings' ? (
+          <SettingsPanel />
+        ) : activeTab === 'enquiries' ? (
           <div className="bg-white border border-[#c8c4d8] rounded-2xl overflow-hidden shadow-xs">
             <div className="p-5 border-b border-[#c8c4d8]/50 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-bold text-[#141b2b]">
-                  Inbound Client Enquiries
-                </h3>
+                <h3 className="text-lg font-bold text-[#141b2b]">Inbound Client Enquiries</h3>
                 <p className="text-xs text-[#474555]">
                   Messages received via the Portfolio Contact Enquiry desk.
                 </p>
@@ -335,14 +322,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           {enq.fullName.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <h4 className="font-bold text-sm text-[#141b2b]">
-                            {enq.fullName}
-                          </h4>
+                          <h4 className="font-bold text-sm text-[#141b2b]">{enq.fullName}</h4>
                           <span className="text-xs text-[#474555]">{enq.email}</span>
                           {enq.phone && (
-                            <span className="text-xs text-[#474555] ml-2">
-                              • {enq.phone}
-                            </span>
+                            <span className="text-xs text-[#474555] ml-2">• {enq.phone}</span>
                           )}
                         </div>
                       </div>
@@ -363,9 +346,22 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </p>
 
                     <div className="flex items-center gap-3 text-xs">
-                      <label>Status <select value={enq.status} onChange={e => onEnquiryStatus(enq.id, e.target.value as Enquiry['status'])} className="p-2 border rounded"><option value="new">New</option><option value="reviewed">Reviewed</option><option value="contacted">Contacted</option></select></label>
+                      <label>
+                        Status{' '}
+                        <select
+                          value={enq.status}
+                          onChange={(e) =>
+                            onEnquiryStatus(enq.id, e.target.value as Enquiry['status'])
+                          }
+                          className="p-2 border rounded"
+                        >
+                          <option value="new">New</option>
+                          <option value="reviewed">Reviewed</option>
+                          <option value="contacted">Contacted</option>
+                        </select>
+                      </label>
                       <a
-                        href={`mailto:${enq.email}?subject=Project Enquiry Response from Chintapalli Pavan Kumar`}
+                        href={`mailto:${encodeURIComponent(enq.email)}?subject=Project%20Enquiry%20Response`}
                         className="text-[#422cd8] font-semibold hover:underline flex items-center gap-1"
                       >
                         <Mail className="w-3.5 h-3.5" />
@@ -392,9 +388,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <div className="bg-white border border-[#c8c4d8] rounded-2xl overflow-hidden shadow-xs">
             <div className="p-5 border-b border-[#c8c4d8]/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-bold text-[#141b2b]">
-                  Master Projects Catalog
-                </h3>
+                <h3 className="text-lg font-bold text-[#141b2b]">Master Projects Catalog</h3>
                 <p className="text-xs text-[#474555]">
                   Edit details, manage publication, and arrange display order.
                 </p>
@@ -447,17 +441,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                                 {proj.title}
                               </span>
                               <span className="text-[#474555] text-[11px]">
-                                {proj.liveUrl
-                                  ? proj.liveUrl.replace('https://', '')
-                                  : ''}
+                                {proj.liveUrl ? proj.liveUrl.replace('https://', '') : ''}
                               </span>
                             </div>
                           </div>
                         </td>
 
-                        <td className="py-4 px-5 font-medium text-[#141b2b]">
-                          {proj.tag}
-                        </td>
+                        <td className="py-4 px-5 font-medium text-[#141b2b]">{proj.tag}</td>
 
                         <td className="py-4 px-5">
                           <div className="flex gap-1.5 flex-wrap">
@@ -487,25 +477,41 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
-                                proj.status === 'published'
-                                  ? 'bg-emerald-500'
-                                  : 'bg-amber-500'
+                                proj.status === 'published' ? 'bg-emerald-500' : 'bg-amber-500'
                               }`}
                             ></span>
-                            <span>
-                              {proj.status === 'published' ? 'Published' : 'Draft'}
-                            </span>
+                            <span>{proj.status === 'published' ? 'Published' : 'Draft'}</span>
                           </span>
                         </td>
 
-                        <td className="py-4 px-5 text-[#474555]">
-                          {proj.lastUpdated}
-                        </td>
+                        <td className="py-4 px-5 text-[#474555]">{proj.lastUpdated}</td>
 
                         <td className="py-4 px-5 text-right space-x-1">
-                          <button type="button" onClick={() => onTogglePublish(proj)} className="p-1.5 text-[#422cd8] underline">{proj.status === 'published' ? 'Unpublish' : 'Publish'}</button>
-                          <button type="button" aria-label={'Move ' + proj.title + ' up'} disabled={projects[0]?.id === proj.id} onClick={() => onReorder(proj, -1)} className="p-1.5 disabled:opacity-30">↑</button>
-                          <button type="button" aria-label={'Move ' + proj.title + ' down'} disabled={projects[projects.length - 1]?.id === proj.id} onClick={() => onReorder(proj, 1)} className="p-1.5 disabled:opacity-30">↓</button>
+                          <button
+                            type="button"
+                            onClick={() => onTogglePublish(proj)}
+                            className="p-1.5 text-[#422cd8] underline"
+                          >
+                            {proj.status === 'published' ? 'Unpublish' : 'Publish'}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={'Move ' + proj.title + ' up'}
+                            disabled={projects[0]?.id === proj.id}
+                            onClick={() => onReorder(proj, -1)}
+                            className="p-1.5 disabled:opacity-30"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={'Move ' + proj.title + ' down'}
+                            disabled={projects[projects.length - 1]?.id === proj.id}
+                            onClick={() => onReorder(proj, 1)}
+                            className="p-1.5 disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
                           <button
                             type="button"
                             onClick={() => onPreviewProject(proj)}

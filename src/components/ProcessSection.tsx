@@ -3,10 +3,7 @@ import { WORK_PROCESS_STEPS } from '../data/initialData';
 
 export const ProcessSection: React.FC = () => {
   return (
-    <section
-      id="process"
-      className="py-20 bg-[#f1f3ff] border-y border-[#c8c4d8]/40"
-    >
+    <section id="process" className="py-20 bg-[#f1f3ff] border-y border-[#c8c4d8]/40">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Header */}
         <div className="text-center max-w-xl mx-auto mb-14">
@@ -17,8 +14,7 @@ export const ProcessSection: React.FC = () => {
             How We Work Together
           </h2>
           <p className="text-sm md:text-base text-[#474555] mt-1">
-            A structured, low-friction pathway from preliminary conversation to live
-            deployment.
+            A structured, low-friction pathway from preliminary conversation to live deployment.
           </p>
         </div>
 
@@ -43,9 +39,7 @@ export const ProcessSection: React.FC = () => {
                   {item.step}
                 </div>
 
-                <h4 className="text-base font-bold text-[#141b2b] mb-1">
-                  {item.title}
-                </h4>
+                <h4 className="text-base font-bold text-[#141b2b] mb-1">{item.title}</h4>
 
                 <p className="text-xs sm:text-[13px] text-[#474555] leading-relaxed">
                   {item.description}

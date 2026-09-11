@@ -19,15 +19,15 @@ export const AboutSection: React.FC = () => {
           </h2>
 
           <p className="text-base md:text-lg text-[#474555] leading-relaxed">
-            I’m a software developer and freelancer who turns ideas into practical
-            digital products. I work across development, design, deployment, and
-            ongoing improvement to help businesses strengthen their digital presence.
+            I’m a software developer and freelancer who turns ideas into practical digital products.
+            I work across development, design, deployment, and ongoing improvement to help
+            businesses strengthen their digital presence.
           </p>
 
           <p className="text-sm md:text-base text-[#474555] leading-relaxed">
-            Whether building a sleek storefront website for a local establishment or
-            engineering a data-driven web app for scaling teams, I focus on clean
-            maintainable code, disciplined structure, and reliable communication.
+            Whether building a sleek storefront website for a local establishment or engineering a
+            data-driven web app for scaling teams, I focus on clean maintainable code, disciplined
+            structure, and reliable communication.
           </p>
 
           {/* Action: Download Resume Button */}
@@ -36,7 +36,9 @@ export const AboutSection: React.FC = () => {
               id="btn-download-resume"
               href={settings.resumeUrl || undefined}
               aria-disabled={!settings.resumeUrl}
-              target="_blank" rel="noopener noreferrer" download
+              target="_blank"
+              rel="noopener noreferrer"
+              download
               className="inline-flex items-center justify-center h-11 px-5 rounded-lg bg-white border border-[#c8c4d8] hover:border-[#777587] text-[#141b2b] text-sm font-semibold hover:bg-[#f1f3ff] transition-all duration-200 shadow-xs gap-2 active:scale-[0.98] cursor-pointer"
             >
               <Download className="w-4 h-4 text-[#422cd8]" />
@@ -47,8 +49,6 @@ export const AboutSection: React.FC = () => {
               {settings.resumeUrl ? 'PDF format' : 'Please contact me for my resume.'}
             </span>
           </div>
-
-
         </div>
 
         {/* Right Capability Matrix */}

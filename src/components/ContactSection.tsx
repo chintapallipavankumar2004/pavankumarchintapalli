@@ -9,9 +9,7 @@ interface ContactSectionProps {
   selectedServicePreset?: string;
 }
 
-export const ContactSection: React.FC<ContactSectionProps> = ({
-  selectedServicePreset,
-}) => {
+export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServicePreset }) => {
   const settings = useSettings();
   const [error, setError] = useState('');
   const [website, setWebsite] = useState('');
@@ -35,19 +33,39 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    setIsSubmitting(true); setIsSuccess(false); setError('');
+    setIsSubmitting(true);
+    setIsSuccess(false);
+    setError('');
     try {
       const enquiry = validateEnquiry({ fullName, email, phone, service, budget, description });
       const content = JSON.stringify(enquiry);
-      if (pending.current?.content !== content) pending.current = { id: crypto.randomUUID(), content };
+      if (pending.current?.content !== content)
+        pending.current = { id: crypto.randomUUID(), content };
       const token = await appCheckToken();
-      const response = await fetch('/api/enquiries', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Firebase-AppCheck': token }, body: JSON.stringify({ ...enquiry, id: pending.current.id, website }), signal: AbortSignal.timeout(30000) });
+      const response = await fetch('/api/enquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Firebase-AppCheck': token },
+        body: JSON.stringify({ ...enquiry, id: pending.current.id, website }),
+        signal: AbortSignal.timeout(30000),
+      });
       const result = await response.json();
-      if (!response.ok || result.saved !== true) throw new Error(result.error || 'Could not save your enquiry. Please try again.');
-      setIsSuccess(true); pending.current = null;
-      setFullName(''); setEmail(''); setPhone(''); setDescription('');
-    } catch (error) { setError(error instanceof Error && error.name !== 'TimeoutError' ? error.message : 'We could not confirm your submission. Please retry; duplicate submissions are prevented.'); }
-    finally { setIsSubmitting(false); }
+      if (!response.ok || result.saved !== true)
+        throw new Error(result.error || 'Could not save your enquiry. Please try again.');
+      setIsSuccess(true);
+      pending.current = null;
+      setFullName('');
+      setEmail('');
+      setPhone('');
+      setDescription('');
+    } catch (error) {
+      setError(
+        error instanceof Error && error.name !== 'TimeoutError'
+          ? error.message
+          : 'We could not confirm your submission. Please retry; duplicate submissions are prevented.',
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -64,8 +82,8 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                 Have a Project in Mind?
               </h2>
               <p className="text-base md:text-lg text-gray-300 mt-2 leading-relaxed">
-                Whether you need a full business website, a specific web
-                application, branding assets, or technical consultation, let’s talk.
+                Whether you need a full business website, a specific web application, branding
+                assets, or technical consultation, let’s talk.
               </p>
             </div>
 
@@ -80,9 +98,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   <Mail className="w-5 h-5" />
                 </div>
                 <div className="overflow-hidden">
-                  <span className="text-xs text-gray-400 block font-medium">
-                    Primary Email
-                  </span>
+                  <span className="text-xs text-gray-400 block font-medium">Primary Email</span>
                   <span className="text-sm font-medium text-white truncate block group-hover:text-[#c4c0ff] transition-colors">
                     {PROFILE_INFO.email}
                   </span>
@@ -100,9 +116,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   <Code className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 block font-medium">
-                    GitHub Repository
-                  </span>
+                  <span className="text-xs text-gray-400 block font-medium">GitHub Repository</span>
                   <span className="text-sm font-medium text-white group-hover:text-[#c4c0ff] transition-colors">
                     {PROFILE_INFO.githubDisplay}
                   </span>
@@ -120,9 +134,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   <Linkedin className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs text-gray-400 block font-medium">
-                    LinkedIn Profile
-                  </span>
+                  <span className="text-xs text-gray-400 block font-medium">LinkedIn Profile</span>
                   <span className="text-sm font-medium text-white group-hover:text-[#c4c0ff] transition-colors">
                     {PROFILE_INFO.linkedinDisplay}
                   </span>
@@ -139,17 +151,29 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
 
           {/* Right Interactive Project Enquiry Form */}
           <div className="lg:col-span-7 bg-white p-8 rounded-2xl text-[#141b2b] shadow-2xl">
-            <h3 className="text-2xl font-bold text-[#141b2b] mb-1">
-              Send a Direct Enquiry
-            </h3>
+            <h3 className="text-2xl font-bold text-[#141b2b] mb-1">Send a Direct Enquiry</h3>
             <p className="text-xs sm:text-sm text-[#474555] mb-6">
-              Fill in the initial parameters below and I will follow up with an
-              actionable project estimate.
+              Tell me what you have in mind so we can discuss your project.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="hidden" aria-hidden="true"><label>Website<input name="website" tabIndex={-1} autoComplete="off" value={website} onChange={e => setWebsite(e.target.value)} /></label></div>
-              {error && <p role="alert" className="text-red-200 text-sm">{error}</p>}
+              <div className="hidden" aria-hidden="true">
+                <label>
+                  Website
+                  <input
+                    name="website"
+                    tabIndex={-1}
+                    autoComplete="off"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                  />
+                </label>
+              </div>
+              {error && (
+                <p role="alert" className="text-red-700 text-sm">
+                  {error}
+                </p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label
@@ -162,9 +186,11 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                     id="enq-name"
                     type="text"
                     required
-                    minLength={2} maxLength={120} value={fullName}
+                    minLength={2}
+                    maxLength={120}
+                    value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. Rahul Sharma"
+                    placeholder="Your full name"
                     className="w-full h-11 px-3.5 rounded-lg border border-[#c8c4d8] bg-white text-[#141b2b] text-sm focus:border-[#5b4cf0] focus:ring-2 focus:ring-[#5b4cf0]/20 focus:outline-none transition-all"
                   />
                 </div>
@@ -179,7 +205,8 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                     id="enq-email"
                     type="email"
                     required
-                    maxLength={254} value={email}
+                    maxLength={254}
+                    value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@company.com"
                     className="w-full h-11 px-3.5 rounded-lg border border-[#c8c4d8] bg-white text-[#141b2b] text-sm focus:border-[#5b4cf0] focus:ring-2 focus:ring-[#5b4cf0]/20 focus:outline-none transition-all"
@@ -194,14 +221,13 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                     className="block text-xs sm:text-sm font-semibold text-[#141b2b] mb-1"
                   >
                     WhatsApp / Phone{' '}
-                    <span className="text-[#474555] font-normal text-xs">
-                      (Optional)
-                    </span>
+                    <span className="text-[#474555] font-normal text-xs">(Optional)</span>
                   </label>
                   <input
                     id="enq-phone"
                     type="tel"
-                    maxLength={32} value={phone}
+                    maxLength={32}
+                    value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+91 98765 43210"
                     className="w-full h-11 px-3.5 rounded-lg border border-[#c8c4d8] bg-white text-[#141b2b] text-sm focus:border-[#5b4cf0] focus:ring-2 focus:ring-[#5b4cf0]/20 focus:outline-none transition-all"
@@ -243,7 +269,11 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   onChange={(e) => setBudget(e.target.value)}
                   className="w-full h-11 px-3.5 rounded-lg border border-[#c8c4d8] bg-white text-[#141b2b] text-sm focus:border-[#5b4cf0] focus:ring-2 focus:ring-[#5b4cf0]/20 focus:outline-none transition-all"
                 >
-                  <option value="Not specified">Let’s discuss the budget</option><option value="Under INR 15000">Under ₹15,000</option><option value="INR 15000-35000">₹15,000–₹35,000</option><option value="INR 35000-75000">₹35,000–₹75,000</option><option value="Over INR 75000">Over ₹75,000</option>
+                  <option value="Not specified">Let’s discuss the budget</option>
+                  <option value="Under INR 15000">Under ₹15,000</option>
+                  <option value="INR 15000-35000">₹15,000–₹35,000</option>
+                  <option value="INR 35000-75000">₹35,000–₹75,000</option>
+                  <option value="Over INR 75000">Over ₹75,000</option>
                 </select>
               </div>
 
@@ -258,7 +288,9 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   id="enq-desc"
                   required
                   rows={4}
-                  minLength={20} maxLength={5000} value={description}
+                  minLength={20}
+                  maxLength={5000}
+                  value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Tell me about your business, the core problem to solve, and your ideal timeline..."
                   className="w-full px-3.5 py-2.5 rounded-lg border border-[#c8c4d8] bg-white text-[#141b2b] text-sm focus:border-[#5b4cf0] focus:ring-2 focus:ring-[#5b4cf0]/20 focus:outline-none transition-all"
@@ -271,9 +303,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({
                   className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-medium flex items-center gap-2"
                 >
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>
-                    Thank you! Your enquiry has been saved for Pavan to review.
-                  </span>
+                  <span>Thank you! Your enquiry has been saved for Pavan to review.</span>
                 </div>
               )}
 

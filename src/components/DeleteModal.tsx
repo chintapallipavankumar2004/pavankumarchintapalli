@@ -30,23 +30,24 @@ export const DeleteModal: React.FC<DeleteModalProps> = ({
         </div>
 
         <div className="space-y-1">
-          <h4 className="text-lg font-bold text-[#141b2b]">
-            Confirm Project Removal
-          </h4>
+          <h4 className="text-lg font-bold text-[#141b2b]">Confirm Project Removal</h4>
           <p className="text-xs sm:text-sm text-[#474555] leading-relaxed">
             Are you sure you want to delete{' '}
-            <span className="font-bold text-[#141b2b]">
-              "{project.title}"
-            </span>
-            ? This removes the project from the portfolio. Uploaded media remains in Cloudinary.
+            <span className="font-bold text-[#141b2b]">"{project.title}"</span>? This removes the
+            project from the portfolio. Uploaded media remains in Cloudinary.
           </p>
         </div>
 
         <div className="pt-2 flex items-center justify-end gap-3">
-          {error && <p role="alert" className="text-red-700">{error}</p>}
+          {error && (
+            <p role="alert" className="text-red-700">
+              {error}
+            </p>
+          )}
           <button
             type="button"
-            disabled={busy} onClick={onClose}
+            disabled={busy}
+            onClick={onClose}
             className="h-10 px-4 rounded-lg border border-[#c8c4d8] text-[#141b2b] text-xs font-semibold hover:bg-[#f1f3ff] transition-colors cursor-pointer"
           >
             Keep Project
@@ -54,7 +55,19 @@ export const DeleteModal: React.FC<DeleteModalProps> = ({
           <button
             id="btn-confirm-delete-project"
             type="button"
-            disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await onConfirm(project.id); onClose(); } catch { setError('Could not delete the project. Please try again.'); } finally { setBusy(false); } }}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError('');
+              try {
+                await onConfirm(project.id);
+                onClose();
+              } catch {
+                setError('Could not delete the project. Please try again.');
+              } finally {
+                setBusy(false);
+              }
+            }}
             className="h-10 px-5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition-colors shadow-xs cursor-pointer"
           >
             Yes, Permanently Delete

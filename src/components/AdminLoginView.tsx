@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { ShieldCheck, User, Lock, ArrowLeft, LogIn, CheckCircle } from 'lucide-react';
-import { signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence, signOut } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  signOut,
+} from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { isAuthorizedAdmin } from '../lib/repository';
 import { PROFILE_INFO } from '../data/initialData';
@@ -23,15 +29,22 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
-    setIsLoading(true); setError('');
+    setIsLoading(true);
+    setError('');
     try {
       if (!auth) throw new Error('Login is not configured.');
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      if (!(await isAuthorizedAdmin())) { await signOut(auth); throw new Error('This account is not authorized for admin access.'); }
+      if (!(await isAuthorizedAdmin())) {
+        await signOut(auth);
+        throw new Error('This account is not authorized for admin access.');
+      }
       onLoginSuccess();
-    } catch { setError('Unable to sign in. Check your credentials and admin access.'); }
-    finally { setIsLoading(false); }
+    } catch {
+      setError('Unable to sign in. Check your credentials and admin access.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -44,16 +57,18 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
           <div className="w-12 h-12 rounded-xl bg-[#5b4cf0] text-white flex items-center justify-center mx-auto shadow-sm">
             <ShieldCheck className="w-6 h-6" />
           </div>
-          <h2 className="text-2xl font-bold text-[#141b2b]">
-            Administrative Suite
-          </h2>
+          <h2 className="text-2xl font-bold text-[#141b2b]">Administrative Suite</h2>
           <p className="text-xs sm:text-sm text-[#474555]">
             Authorized access for {PROFILE_INFO.name}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          )}
           <div>
             <label
               htmlFor="admin-email"
@@ -64,7 +79,8 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
             <div className="relative">
               <input
                 id="admin-email"
-                type="email" autoComplete="username"
+                type="email"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -82,12 +98,12 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
               >
                 Security Key / Password
               </label>
-
             </div>
             <div className="relative">
               <input
                 id="admin-pwd"
-                type="password" autoComplete="current-password"
+                type="password"
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

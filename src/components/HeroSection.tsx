@@ -8,16 +8,10 @@ interface HeroSectionProps {
   onStartProject: () => void;
 }
 
-export const HeroSection: React.FC<HeroSectionProps> = ({
-  onViewWork,
-  onStartProject,
-}) => {
+export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartProject }) => {
   const settings = useSettings();
   return (
-    <section
-      id="hero"
-      className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden"
-    >
+    <section id="hero" className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
         {/* Left Column (55% desktop: 7 cols) */}
         <div className="lg:col-span-7 flex flex-col items-start space-y-6">
@@ -33,7 +27,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             <span className="text-[#474555] text-xs sm:text-sm font-medium">
               {settings.availability || 'Let’s build your next project'}
             </span>
-            <span className="text-[#c8c4d8] text-xs">•</span>
+            {settings.bookingsWindow && <span className="text-[#c8c4d8] text-xs">•</span>}
             <span className="text-[#422cd8] text-xs font-semibold tracking-wide">
               {settings.bookingsWindow}
             </span>
@@ -51,8 +45,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
           {/* Value Proposition Subtitle */}
           <p className="text-lg md:text-xl text-[#474555] max-w-xl leading-relaxed font-normal">
-            I build websites, web applications, and business solutions for startups
-            and growing businesses with clean engineering and sharp execution.
+            I build websites, web applications, and business solutions for startups and growing
+            businesses with clean engineering and sharp execution.
           </p>
 
           {/* Dual Action CTAs */}
@@ -79,28 +73,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           {/* Quick Meta Stats / Confidence Indicators */}
           <div className="pt-6 grid grid-cols-3 gap-6 border-t border-[#c8c4d8]/30 w-full max-w-lg">
             <div>
-              <span className="block text-xl md:text-2xl font-bold text-[#141b2b]">
-                Direct
-              </span>
-              <span className="text-xs sm:text-sm text-[#474555]">
-                Clear Communication
-              </span>
+              <span className="block text-xl md:text-2xl font-bold text-[#141b2b]">Direct</span>
+              <span className="text-xs sm:text-sm text-[#474555]">Clear Communication</span>
             </div>
             <div>
-              <span className="block text-xl md:text-2xl font-bold text-[#141b2b]">
-                Focused
-              </span>
-              <span className="text-xs sm:text-sm text-[#474555]">
-                Project Planning
-              </span>
+              <span className="block text-xl md:text-2xl font-bold text-[#141b2b]">Focused</span>
+              <span className="text-xs sm:text-sm text-[#474555]">Project Planning</span>
             </div>
             <div>
-              <span className="block text-xl md:text-2xl font-bold text-[#141b2b]">
-                Full-Stack
-              </span>
-              <span className="text-xs sm:text-sm text-[#474555]">
-                React • Java • Cloud
-              </span>
+              <span className="block text-xl md:text-2xl font-bold text-[#141b2b]">Full-Stack</span>
+              <span className="text-xs sm:text-sm text-[#474555]">React • Java • Cloud</span>
             </div>
           </div>
         </div>
@@ -125,12 +107,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 {/* Floating badge over portrait */}
                 <div className="absolute bottom-3 left-3 right-3 p-3 bg-white/90 backdrop-blur-md rounded-lg border border-[#c8c4d8]/40 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-bold text-[#141b2b]">
-                      {PROFILE_INFO.shortName}
-                    </p>
-                    <p className="text-xs text-[#474555]">
-                      {PROFILE_INFO.roleHeadline}
-                    </p>
+                    <p className="text-sm font-bold text-[#141b2b]">{PROFILE_INFO.shortName}</p>
+                    <p className="text-xs text-[#474555]">{PROFILE_INFO.roleHeadline}</p>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-[#5b4cf0]/10 flex items-center justify-center text-[#422cd8]">
                     <CheckCircle2 className="w-5 h-5 fill-[#5b4cf0]/20" />
@@ -144,9 +122,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5b4cf0]"></span>
                   {PROFILE_INFO.location}
                 </span>
-                <span className="text-xs text-[#777587] font-mono">
-                  {PROFILE_INFO.timezone}
-                </span>
+                <span className="text-xs text-[#777587] font-mono">{PROFILE_INFO.timezone}</span>
               </div>
             </div>
           </div>

@@ -7,6 +7,8 @@ export function adminServices() {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
   if (!projectId || !clientEmail || !privateKey) throw new Error('Server configuration missing');
-  const app = getApps()[0] || initializeApp({ credential: cert({ projectId, clientEmail, privateKey }), projectId });
+  const app =
+    getApps()[0] ||
+    initializeApp({ credential: cert({ projectId, clientEmail, privateKey }), projectId });
   return { auth: getAuth(app), db: getFirestore(app), appCheck: getAppCheck(app) };
 }

@@ -20,14 +20,9 @@ export interface Project {
   image: string;
   thumbnail: string;
   bannerImage?: string;
-  isFeatured?: boolean;
-  screenSizesCount?: number;
   lastUpdated: string;
   challenge?: string;
   solution?: string[];
-  lighthouseScore?: number;
-  fcpScore?: string;
-  wcagScore?: number;
 }
 
 export interface Enquiry {

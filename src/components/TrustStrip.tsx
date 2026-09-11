@@ -7,37 +7,30 @@ export const TrustStrip: React.FC = () => {
       id: 'trust-item-1',
       icon: Smartphone,
       title: 'Responsive Development',
-      description:
-        'Layouts designed for phones, tablets, and desktops.',
+      description: 'Layouts designed for phones, tablets, and desktops.',
     },
     {
       id: 'trust-item-2',
       icon: Rocket,
       title: 'Design to Deployment',
-      description:
-        'End-to-end delivery from wireframes and code to live server configuration.',
+      description: 'End-to-end delivery from wireframes and code to live server configuration.',
     },
     {
       id: 'trust-item-3',
       icon: MessageSquare,
       title: 'Clear Communication',
-      description:
-        'Discuss project scope, progress, and feedback directly.',
+      description: 'Discuss project scope, progress, and feedback directly.',
     },
     {
       id: 'trust-item-4',
       icon: Headphones,
       title: 'Ongoing Support',
-      description:
-        'Discuss maintenance and updates for your project.',
+      description: 'Discuss maintenance and updates for your project.',
     },
   ];
 
   return (
-    <section
-      id="trust-strip"
-      className="border-y border-[#c8c4d8]/40 bg-white py-8"
-    >
+    <section id="trust-strip" className="border-y border-[#c8c4d8]/40 bg-white py-8">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
           {trustItems.map((item) => {
@@ -48,9 +41,7 @@ export const TrustStrip: React.FC = () => {
                   <Icon className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-base font-semibold text-[#141b2b]">
-                    {item.title}
-                  </h4>
+                  <h4 className="text-base font-semibold text-[#141b2b]">{item.title}</h4>
                   <p className="text-xs sm:text-[13px] text-[#474555] mt-0.5 leading-relaxed">
                     {item.description}
                   </p>

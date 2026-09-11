@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
 import { Lock, Menu, X } from 'lucide-react';
 import { ViewMode } from '../types';
+import { useSettings } from '../lib/settings';
 
 interface TopNavbarProps {
   onNavigateToSection: (sectionId: string) => void;
   onSwitchView: (view: ViewMode) => void;
 }
 
-export const TopNavbar: React.FC<TopNavbarProps> = ({
-  onNavigateToSection,
-  onSwitchView,
-}) => {
+export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateToSection, onSwitchView }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const settings = useSettings();
 
   const handleNavClick = (sectionId: string) => {
     onNavigateToSection(sectionId);
@@ -81,7 +80,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span>Available for freelance projects</span>
+            <span>{settings.availability || 'Let’s discuss your project'}</span>
           </div>
 
           {/* Primary CTA Button */}
@@ -98,7 +97,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           <button
             id="btn-mobile-toggle"
             type="button"
-            aria-label="Open Navigation Menu"
+            aria-label={mobileMenuOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-nav-menu"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="md:hidden p-2 rounded-lg text-[#474555] hover:bg-[#e9edff] transition-colors"
           >
@@ -118,7 +119,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span>Available for freelance projects</span>
+            <span>{settings.availability || 'Let’s discuss your project'}</span>
           </div>
           <button
             type="button"

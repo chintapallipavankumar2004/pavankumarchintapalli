@@ -3,8 +3,21 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "routes": [
-    { "src": "/admin(?:/.*)?", "headers": { "X-Robots-Tag": "noindex, nofollow" }, "continue": true },
-    { "src": "/.*", "headers": { "X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin", "X-Frame-Options": "DENY", "Permissions-Policy": "camera=(), microphone=(), geolocation=()" }, "continue": true },
+    {
+      "src": "/admin(?:/.*)?",
+      "headers": { "X-Robots-Tag": "noindex, nofollow" },
+      "continue": true
+    },
+    {
+      "src": "/.*",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "X-Frame-Options": "DENY",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+      },
+      "continue": true
+    },
     { "handle": "filesystem" },
     { "src": "/api/.*", "status": 404 },
     { "src": "/resume.pdf", "status": 404 },

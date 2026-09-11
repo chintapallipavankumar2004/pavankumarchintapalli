@@ -6,10 +6,7 @@ interface FooterProps {
   onSwitchView: (view: ViewMode) => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({
-  onNavigateToSection,
-  onSwitchView,
-}) => {
+export const Footer: React.FC<FooterProps> = ({ onNavigateToSection, onSwitchView }) => {
   return (
     <footer className="w-full bg-white border-t border-[#c8c4d8]/40 py-10">
       <div className="flex flex-col md:flex-row justify-between items-center w-full px-6 max-w-7xl mx-auto gap-6">
@@ -67,7 +64,10 @@ export const Footer: React.FC<FooterProps> = ({
 
         {/* Copyright */}
         <div className="text-center md:text-right text-xs text-[#474555]">
-          <p>© {new Date().getFullYear()} Chintapalli Pavan Kumar. Engineered with precision. All rights reserved.</p>
+          <p>
+            © {new Date().getFullYear()} Chintapalli Pavan Kumar. Engineered with precision. All
+            rights reserved.
+          </p>
         </div>
       </div>
     </footer>

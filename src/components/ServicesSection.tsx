@@ -6,9 +6,7 @@ interface ServicesSectionProps {
   onSelectService: (serviceId: string) => void;
 }
 
-export const ServicesSection: React.FC<ServicesSectionProps> = ({
-  onSelectService,
-}) => {
+export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectService }) => {
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'laptop':
@@ -24,10 +22,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
   };
 
   return (
-    <section
-      id="services"
-      className="py-20 bg-white border-t border-[#c8c4d8]/30"
-    >
+    <section id="services" className="py-20 bg-white border-t border-[#c8c4d8]/30">
       <div className="max-w-7xl mx-auto px-6">
         {/* Section Heading */}
         <div className="text-center max-w-2xl mx-auto mb-16">
@@ -38,8 +33,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
             What I Can Build for You
           </h2>
           <p className="text-base md:text-lg text-[#474555] mt-2 leading-relaxed">
-            From singular landing pages to end-to-end production systems, each
-            project is architected for scalability, speed, and business impact.
+            From singular landing pages to end-to-end production systems, each project is
+            architected for scalability, speed, and business impact.
           </p>
         </div>
 
@@ -58,9 +53,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({
                     <Icon className="w-6 h-6" />
                   </div>
 
-                  <h3 className="text-lg font-bold text-[#141b2b] mb-2">
-                    {service.title}
-                  </h3>
+                  <h3 className="text-lg font-bold text-[#141b2b] mb-2">{service.title}</h3>
 
                   <p className="text-xs sm:text-[13px] text-[#474555] mb-5 leading-relaxed">
                     {service.description}

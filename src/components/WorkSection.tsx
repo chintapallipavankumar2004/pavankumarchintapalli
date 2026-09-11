@@ -8,16 +8,17 @@ interface WorkSectionProps {
   onViewLiveUrl?: (url: string) => void;
 }
 
-export const WorkSection: React.FC<WorkSectionProps> = ({
-  projects,
-  onSelectProject,
-}) => {
+export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProject }) => {
   const [activeCategory, setActiveCategory] = useState<string>('websites');
 
-  projects = projects.filter(project => project.status === 'published');
+  projects = projects.filter((project) => project.status === 'published');
   const categories = [
     { id: 'all', label: 'All' },
-    { id: 'websites', label: 'Websites', count: projects.filter((p) => p.category === 'website').length },
+    {
+      id: 'websites',
+      label: 'Websites',
+      count: projects.filter((p) => p.category === 'website').length,
+    },
     { id: 'posters', label: 'Posters' },
     { id: 'logos', label: 'Logos' },
     { id: 'automations', label: 'Automations' },
@@ -54,7 +55,8 @@ export const WorkSection: React.FC<WorkSectionProps> = ({
 
         {/* Total Counter */}
         <div className="text-sm text-[#474555] bg-white px-4 py-2 rounded-lg border border-[#c8c4d8]/40 shadow-xs self-start md:self-auto font-medium">
-          Showing <span className="font-bold text-[#141b2b]">{filteredProjects.length}</span> Published {filteredProjects.length === 1 ? 'Release' : 'Releases'}
+          Showing <span className="font-bold text-[#141b2b]">{filteredProjects.length}</span>{' '}
+          Published {filteredProjects.length === 1 ? 'Project' : 'Projects'}
         </div>
       </div>
 
@@ -154,7 +156,12 @@ export const WorkSection: React.FC<WorkSectionProps> = ({
                     <a
                       id={`btn-view-details-${project.id}`}
                       href={`/projects/${project.slug}`}
-                      onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { e.preventDefault(); onSelectProject(project); } }}
+                      onClick={(e) => {
+                        if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                          e.preventDefault();
+                          onSelectProject(project);
+                        }
+                      }}
                       className="inline-flex items-center justify-center h-10 px-5 rounded-lg bg-[#5b4cf0] text-white text-sm font-semibold hover:bg-[#422cd8] transition-all duration-150 gap-1.5 shadow-xs active:scale-[0.98] cursor-pointer"
                     >
                       <span>View Project Details</span>
@@ -199,12 +206,10 @@ export const WorkSection: React.FC<WorkSectionProps> = ({
                     <div className="relative aspect-[16/10] overflow-hidden bg-[#141b2b]">
                       <img
                         id={`showcase-img-${project.id}`}
-                        alt={`${project.title} website interface mockup`}
+                        alt={`${project.title} project preview`}
                         src={project.image}
                         className="w-full h-full object-cover object-top hover:scale-[1.02] transition-transform duration-500"
                       />
-
-
                     </div>
                   </div>
                 </div>

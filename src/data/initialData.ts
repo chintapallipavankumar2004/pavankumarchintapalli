@@ -1,7 +1,4 @@
-import { Project, Enquiry, ServiceItem } from '../types';
-
-export const INITIAL_PROJECTS: Project[] = [];
-export const INITIAL_ENQUIRIES: Enquiry[] = [];
+import { ServiceItem } from '../types';
 
 export const PROFILE_INFO = {
   name: 'Chintapalli Pavan Kumar',
@@ -19,8 +16,7 @@ export const PROFILE_INFO = {
   availability: '',
   bookingsWindow: '',
   responseWindow: '',
-  headshot:
-    'https://res.cloudinary.com/dj4g3bvsb/image/upload/v1789114437/portfolio_hybq1j.png',
+  headshot: 'https://res.cloudinary.com/dj4g3bvsb/image/upload/v1789114437/portfolio_hybq1j.png',
 };
 
 export const SERVICES: ServiceItem[] = [
