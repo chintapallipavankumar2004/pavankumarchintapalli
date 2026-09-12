@@ -31,7 +31,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateToSection, onSwi
           className="flex items-center gap-1.5 group text-left cursor-pointer"
         >
           <span className="text-2xl font-bold tracking-tight text-[#141b2b] group-hover:text-[#422cd8] transition-colors">
-            pavan
+            Pavan Kumar
           </span>
           <span className="inline-block w-2 h-2 rounded-full bg-[#5b4cf0]"></span>
         </button>
