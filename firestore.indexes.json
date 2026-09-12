@@ -1,6 +1,4 @@
 {
   "indexes": [],
-  "fieldOverrides": [
-    { "collectionGroup": "enquiryLimits", "fieldPath": "expiresAt", "ttl": true, "indexes": [] }
-  ]
+  "fieldOverrides": []
 }

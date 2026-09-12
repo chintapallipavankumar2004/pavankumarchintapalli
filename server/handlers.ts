@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { adminServices } from './admin';
+import { adminServices } from './admin.js';
 import {
   HttpError,
   bodyObject,
@@ -9,9 +9,9 @@ import {
   respondError,
   type Request,
   type Response,
-} from './http';
-import { signUpload } from './signature';
-import { validateEnquiry } from '../src/lib/validation';
+} from './http.js';
+import { signUpload } from './signature.js';
+import { validateEnquiry } from '../src/lib/validation.js';
 
 export type Services = ReturnType<typeof adminServices>;
 async function requireAdmin(req: Request, services: Services) {

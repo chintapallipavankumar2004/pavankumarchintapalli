@@ -49,6 +49,13 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
         body: JSON.stringify({ ...enquiry, id: pending.current.id, website }),
         signal: AbortSignal.timeout(30000),
       });
+      const responseType = response.headers.get('content-type')?.toLowerCase() || '';
+      if (!responseType.includes('application/json'))
+        throw new Error(
+          response.ok
+            ? 'The server returned an unexpected response. Please try again.'
+            : 'The enquiry service is temporarily unavailable. Please try again later or use the email link.',
+        );
       const result = await response.json();
       if (!response.ok || result.saved !== true)
         throw new Error(result.error || 'Could not save your enquiry. Please try again.');

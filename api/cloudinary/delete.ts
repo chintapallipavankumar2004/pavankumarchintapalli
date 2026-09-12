@@ -1,2 +1,2 @@
-import { createMediaDeleteHandler } from '../../server/handlers';
+import { createMediaDeleteHandler } from '../../server/handlers.js';
 export default createMediaDeleteHandler();
