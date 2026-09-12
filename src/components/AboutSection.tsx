@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { Download, Layers, CheckCircle } from 'lucide-react';
 import { useSettings } from '../lib/settings';
-import { TECHNICAL_TOOLKIT } from '../data/initialData';
+import { useContent } from '../lib/content';
 
 export const AboutSection: React.FC = () => {
   const settings = useSettings();
+  const { content, skills } = useContent();
+  const development = skills.filter(item => item.group.toLowerCase().includes('development')).map(item => item.name);
+  const creative = skills.filter(item => item.group.toLowerCase().includes('creative')).map(item => item.name);
+  const tools = skills.filter(item => !item.group.toLowerCase().includes('development') && !item.group.toLowerCase().includes('creative')).map(item => item.name);
   return (
     <section id="about" className="py-20 max-w-7xl mx-auto px-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
@@ -15,7 +19,7 @@ export const AboutSection: React.FC = () => {
           </span>
 
           <h2 className="text-3xl md:text-4xl font-bold text-[#141b2b] tracking-tight leading-tight">
-            Turning Ideas into Practical Digital Products
+            {content.aboutHeading}
           </h2>
 
           <p className="text-base md:text-lg text-[#474555] leading-relaxed">
@@ -68,7 +72,7 @@ export const AboutSection: React.FC = () => {
               <span className="text-xs font-mono text-[#474555]">Core Stack</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {TECHNICAL_TOOLKIT.development.map((item, idx) => (
+              {development.map((item, idx) => (
                 <span
                   key={idx}
                   className="px-3 py-1.5 rounded-lg bg-[#f9f9ff] border border-[#c8c4d8]/60 text-xs font-medium text-[#141b2b]"
@@ -89,7 +93,7 @@ export const AboutSection: React.FC = () => {
               <span className="text-xs font-mono text-[#474555]">Visual Assets</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {TECHNICAL_TOOLKIT.creative.map((item, idx) => (
+              {creative.map((item, idx) => (
                 <span
                   key={idx}
                   className="px-3 py-1.5 rounded-lg bg-[#f9f9ff] border border-[#c8c4d8]/60 text-xs font-medium text-[#141b2b]"
@@ -110,7 +114,7 @@ export const AboutSection: React.FC = () => {
               <span className="text-xs font-mono text-[#474555]">DevOps & Infra</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {TECHNICAL_TOOLKIT.tools.map((item, idx) => (
+              {tools.map((item, idx) => (
                 <span
                   key={idx}
                   className="px-3 py-1.5 rounded-lg bg-[#f9f9ff] border border-[#c8c4d8]/60 text-xs font-medium text-[#141b2b]"

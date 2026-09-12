@@ -1,5 +1,10 @@
-import { auth } from './firebase';
-export async function uploadMedia(file: File, kind: 'image' | 'resume') {
+import { auth, appCheckToken } from './firebase';
+import type { MediaAsset } from '../types';
+async function adminHeaders() {
+  const user=auth?.currentUser; if(!user) throw new Error('Your session expired. Sign in again.');
+  return {'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-Firebase-AppCheck':await appCheckToken()};
+}
+export async function uploadMedia(file: File, kind: 'image' | 'resume'): Promise<MediaAsset> {
   const allowed =
     kind === 'resume' ? ['application/pdf'] : ['image/jpeg', 'image/png', 'image/webp'];
   if (!allowed.includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024)
@@ -9,11 +14,10 @@ export async function uploadMedia(file: File, kind: 'image' | 'resume') {
     new TextDecoder().decode(await file.slice(0, 5).arrayBuffer()) !== '%PDF-'
   )
     throw new Error('Choose an actual PDF file.');
-  if (!auth?.currentUser) throw new Error('Sign in before uploading.');
-  const token = await auth.currentUser.getIdToken();
+  const headers = await adminHeaders();
   const signed = await fetch('/api/cloudinary/sign', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers,
     body: JSON.stringify({ kind }),
     signal: AbortSignal.timeout(30000),
   });
@@ -31,5 +35,10 @@ export async function uploadMedia(file: File, kind: 'image' | 'resume') {
   const media = await response.json();
   if (!response.ok || !media.secure_url || (kind === 'resume' && media.format !== 'pdf'))
     throw new Error('Upload failed. Check the file and Cloudinary preset.');
-  return media.secure_url as string;
+  const safe=Object.fromEntries(Object.entries(media).filter(([key])=>['asset_id','public_id','resource_type','type','format','version','secure_url','bytes','width','height','original_filename'].includes(key)));
+  const completed=await fetch('/api/cloudinary/complete',{method:'POST',headers,body:JSON.stringify(safe)});
+  const result=await completed.json();
+  if(!completed.ok) throw new Error(result.error||'Upload succeeded but registration failed.');
+  return {...result.media,id:result.media.assetId} as MediaAsset;
 }
+export async function deleteMedia(mediaId:string){const response=await fetch('/api/cloudinary/delete',{method:'POST',headers:await adminHeaders(),body:JSON.stringify({mediaId})});const value=await response.json();if(!response.ok)throw new Error(value.error||'Media deletion failed.');return value;}

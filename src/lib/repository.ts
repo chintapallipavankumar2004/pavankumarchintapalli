@@ -13,7 +13,8 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { httpsUrl, pdfUrl, slugPattern } from './validation';
-import type { Project, Enquiry, PortfolioSettings } from '../types';
+import type { Project, Enquiry, PortfolioSettings, SiteContent, ServiceItem, SkillItem, ProcessItem, CategoryItem, MediaAsset } from '../types';
+import { defaultContent } from '../data/defaultContent';
 
 const database = () => {
   if (!db) throw new Error('Firebase is not configured.');
@@ -153,3 +154,43 @@ export async function saveSettings(settings: PortfolioSettings) {
 export async function setEnquiryStatus(id: string, status: Enquiry['status']) {
   await updateDoc(doc(database(), 'enquiries', id), { status });
 }
+
+type CmsCollection = 'categories' | 'services' | 'skills' | 'process';
+export function watchSiteContent(next: (value: SiteContent) => void, fail: (error: Error) => void) {
+  return onSnapshot(doc(database(), 'siteContent', 'general'), (snap) => next(snap.exists() ? { ...defaultContent, ...snap.data() } as SiteContent : defaultContent), fail);
+}
+export function watchCmsCollection<T extends { id: string; order: number; published: boolean }>(name: CmsCollection, admin: boolean, next: (items: T[]) => void, fail: (error: Error) => void) {
+  const ref = collection(database(), name);
+  return onSnapshot(admin ? query(ref) : query(ref, where('published', '==', true)), snap => next(snap.docs.map(d => ({ ...d.data(), id: d.id } as T)).sort((a,b) => a.order-b.order)), fail);
+}
+export function watchMedia(next: (items: MediaAsset[]) => void, fail: (error: Error) => void) {
+  return onSnapshot(collection(database(), 'media'), snap => next(snap.docs.map(d => ({ ...d.data(), id: d.id } as MediaAsset))), fail);
+}
+export async function saveSiteContent(value: SiteContent) {
+  if (!value.name.trim() || !value.email.includes('@') || value.metaDescription.length > 320) throw new Error('Check the name, email, and SEO description.');
+  for (const url of [value.github, value.linkedin, value.ogImage, value.canonicalUrl]) if (url && !httpsUrl(url)) throw new Error('Public URLs must use HTTPS.');
+  const ref = doc(database(), 'siteContent', 'general');
+  await runTransaction(database(), async tx => {
+    const before = await tx.get(ref);
+    const revision = before.exists() ? doc(collection(database(), 'contentRevisions')) : null;
+    if (revision) tx.set(revision, { entityType: 'siteContent', entityId: 'general', snapshot: before.data(), createdAt: serverTimestamp(), createdBy: auth?.currentUser?.uid || '' });
+    tx.set(ref, { ...value, updatedAt: serverTimestamp(), updatedBy: auth?.currentUser?.uid || '' }, { merge: true });
+    tx.set(doc(collection(database(), 'auditLogs')), { action: 'site-content.update', entityType: 'siteContent', entityId: 'general', adminUid: auth?.currentUser?.uid || '', summary: 'Updated public website content', result: 'success', createdAt: serverTimestamp() });
+  });
+}
+export async function saveCmsItem(name: CmsCollection, item: ServiceItem | SkillItem | ProcessItem | CategoryItem) {
+  if (!item.id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.id)) throw new Error('Use a lowercase unique ID.');
+  await setDoc(doc(database(), name, item.id), { ...item, updatedAt: serverTimestamp(), updatedBy: auth?.currentUser?.uid || '', schemaVersion: 1 }, { merge: true });
+  await setDoc(doc(collection(database(), 'auditLogs')), { action: `${name}.update`, entityType: name, entityId: item.id, adminUid: auth?.currentUser?.uid || '', summary: `Updated ${name} item`, result: 'success', createdAt: serverTimestamp() });
+}
+export async function removeCmsItem(name: CmsCollection, id: string) {
+  if (name === 'categories') {
+    const linked = await import('firebase/firestore').then(({ getDocs }) => getDocs(query(collection(database(), 'projects'), where('category', '==', id))));
+    if (!linked.empty) throw new Error('Reassign projects before deleting this category.');
+  }
+  await deleteDoc(doc(database(), name, id));
+}
+export async function updateEnquiry(id: string, status: Enquiry['status'], internalNote = '') {
+  await updateDoc(doc(database(), 'enquiries', id), { status, internalNote: internalNote.slice(0, 2000), updatedAt: serverTimestamp() });
+}
+export async function removeEnquiry(id: string) { await deleteDoc(doc(database(), 'enquiries', id)); }

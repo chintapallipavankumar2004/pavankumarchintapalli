@@ -24,7 +24,7 @@ test('patched transitive UUID remains compatible with the Google HTTP multipart 
   const result = await new Gaxios().request({
     url: 'https://example.invalid',
     method: 'POST',
-    multipart: [{ headers: { 'Content-Type': 'text/plain' }, body: 'test' }],
+    multipart: [{ headers: { 'Content-Type': 'text/plain' }, content: 'test' }],
     adapter: async (options: any) => {
       assert.match(options.headers['Content-Type'], /^multipart\/related; boundary=[0-9a-f-]{36}$/);
       let body = '';
@@ -74,7 +74,7 @@ async function invoke(
   return { status, data, headers: responseHeaders };
 }
 function fixture(uid = 'owner', tokenValid = true, appCheckValid = true) {
-  const documents = new Map<string, any>([['access/admin', { uid: 'owner' }]]);
+  const documents = new Map<string, any>([['access/admin', { uid: 'owner' }], ['services/website', { published: true }]]);
   let revocationChecked = false;
   const snapshot = (path: string) => ({
     exists: documents.has(path),
@@ -88,6 +88,7 @@ function fixture(uid = 'owner', tokenValid = true, appCheckValid = true) {
           if (!tokenValid) throw Error('invalid');
           return { uid };
         },
+        getUser: async () => ({ customClaims: {} }),
       },
       appCheck: {
         verifyToken: async () => {
@@ -166,7 +167,7 @@ test('sign endpoint rejects invalid, revoked and non-admin sessions', async () =
       await invoke(
         createSignHandler(fixture('someone-else').services),
         { kind: 'image' },
-        { authorization: 'Bearer user' },
+        { authorization: 'Bearer user', 'x-firebase-appcheck': 'check' },
       )
     ).status,
     403,
@@ -175,7 +176,7 @@ test('sign endpoint rejects invalid, revoked and non-admin sessions', async () =
 test('sign endpoint signs only fixed parameters and never returns the secret', async () => {
   const f = fixture();
   const handler = createSignHandler(f.services);
-  const result = await invoke(handler, { kind: 'image' }, { authorization: 'Bearer owner' });
+  const result = await invoke(handler, { kind: 'image' }, { authorization: 'Bearer owner', 'x-firebase-appcheck': 'check' });
   assert.equal(result.status, 200);
   assert.equal(f.checked(), true);
   assert.equal(result.data.params.allowed_formats, 'jpg,jpeg,png,webp');
@@ -187,12 +188,12 @@ test('sign endpoint signs only fixed parameters and never returns the secret', a
       await invoke(
         handler,
         { kind: 'image', public_id: 'other/file' },
-        { authorization: 'Bearer owner' },
+        { authorization: 'Bearer owner', 'x-firebase-appcheck': 'check' },
       )
     ).status,
     400,
   );
-  const pdf = await invoke(handler, { kind: 'resume' }, { authorization: 'Bearer owner' });
+  const pdf = await invoke(handler, { kind: 'resume' }, { authorization: 'Bearer owner', 'x-firebase-appcheck': 'check' });
   assert.equal(pdf.data.params.allowed_formats, 'pdf');
   assert.equal(pdf.data.params.upload_preset, 'portfolio-resume');
 });

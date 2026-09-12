@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Code, Linkedin, Clock, Send, CheckCircle2 } from 'lucide-react';
-import { PROFILE_INFO } from '../data/initialData';
 import { appCheckToken } from '../lib/firebase';
+import { useContent } from '../lib/content';
 import { validateEnquiry } from '../lib/validation';
 import { useSettings } from '../lib/settings';
 
@@ -10,6 +10,7 @@ interface ContactSectionProps {
 }
 
 export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServicePreset }) => {
+  const { content, services } = useContent();
   const settings = useSettings();
   const [error, setError] = useState('');
   const [website, setWebsite] = useState('');
@@ -37,7 +38,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
     setIsSuccess(false);
     setError('');
     try {
-      const enquiry = validateEnquiry({ fullName, email, phone, service, budget, description });
+      const enquiry = validateEnquiry({ fullName, email, phone, service, budget, description }, services.map(item => item.id));
       const content = JSON.stringify(enquiry);
       if (pending.current?.content !== content)
         pending.current = { id: crypto.randomUUID(), content };
@@ -91,7 +92,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
             <div className="space-y-4">
               <a
                 id="contact-email-link"
-                href={`mailto:${PROFILE_INFO.email}`}
+                href={`mailto:${content.email}`}
                 className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 transition-all group"
               >
                 <div className="w-10 h-10 rounded-lg bg-[#5b4cf0] text-white flex items-center justify-center shrink-0">
@@ -100,14 +101,14 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
                 <div className="overflow-hidden">
                   <span className="text-xs text-gray-400 block font-medium">Primary Email</span>
                   <span className="text-sm font-medium text-white truncate block group-hover:text-[#c4c0ff] transition-colors">
-                    {PROFILE_INFO.email}
+                    {content.email}
                   </span>
                 </div>
               </a>
 
               <a
                 id="contact-github-link"
-                href={PROFILE_INFO.github}
+                href={content.github}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 transition-all group"
@@ -118,14 +119,14 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
                 <div>
                   <span className="text-xs text-gray-400 block font-medium">GitHub Repository</span>
                   <span className="text-sm font-medium text-white group-hover:text-[#c4c0ff] transition-colors">
-                    {PROFILE_INFO.githubDisplay}
+                    {content.github.replace(/^https?:\/\//, '')}
                   </span>
                 </div>
               </a>
 
               <a
                 id="contact-linkedin-link"
-                href={PROFILE_INFO.linkedin}
+                href={content.linkedin}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 transition-all group"
@@ -136,7 +137,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
                 <div>
                   <span className="text-xs text-gray-400 block font-medium">LinkedIn Profile</span>
                   <span className="text-sm font-medium text-white group-hover:text-[#c4c0ff] transition-colors">
-                    {PROFILE_INFO.linkedinDisplay}
+                    {content.linkedin.replace(/^https?:\/\//, '')}
                   </span>
                 </div>
               </a>
@@ -247,11 +248,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
                     onChange={(e) => setService(e.target.value)}
                     className="w-full h-11 px-3.5 rounded-lg border border-[#c8c4d8] bg-white text-[#141b2b] text-sm focus:border-[#5b4cf0] focus:ring-2 focus:ring-[#5b4cf0]/20 focus:outline-none transition-all"
                   >
-                    <option value="website">Website Development</option>
-                    <option value="webapp">Custom Web Application</option>
-                    <option value="branding">Design & Branding (Posters / Logos)</option>
-                    <option value="automation">Workflow Automation & Integrations</option>
-                    <option value="consulting">General Technical Consultation</option>
+                    {services.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
                   </select>
                 </div>
               </div>

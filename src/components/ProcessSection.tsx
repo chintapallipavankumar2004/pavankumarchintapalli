@@ -1,7 +1,8 @@
 import React from 'react';
-import { WORK_PROCESS_STEPS } from '../data/initialData';
+import { useContent } from '../lib/content';
 
 export const ProcessSection: React.FC = () => {
+  const { process } = useContent();
   return (
     <section id="process" className="py-20 bg-[#f1f3ff] border-y border-[#c8c4d8]/40">
       <div className="max-w-7xl mx-auto px-6">
@@ -23,12 +24,12 @@ export const ProcessSection: React.FC = () => {
           {/* Background connector bar for desktop */}
           <div className="hidden md:block absolute top-10 left-12 right-12 h-0.5 bg-[#c8c4d8]/60 z-0"></div>
 
-          {WORK_PROCESS_STEPS.map((item, idx) => {
-            const isLast = idx === WORK_PROCESS_STEPS.length - 1;
+          {process.map((item, idx) => {
+            const isLast = idx === process.length - 1;
             return (
               <div
-                key={item.step}
-                id={`process-step-${item.step}`}
+                key={item.id}
+                id={`process-step-${item.id}`}
                 className="relative z-10 bg-white p-5 rounded-xl border border-[#c8c4d8]/60 flex flex-col items-center text-center shadow-xs hover:shadow-sm transition-shadow"
               >
                 <div
@@ -36,7 +37,7 @@ export const ProcessSection: React.FC = () => {
                     isLast ? 'bg-emerald-600' : 'bg-[#5b4cf0]'
                   }`}
                 >
-                  {item.step}
+                  {String(idx + 1).padStart(2, '0')}
                 </div>
 
                 <h4 className="text-base font-bold text-[#141b2b] mb-1">{item.title}</h4>

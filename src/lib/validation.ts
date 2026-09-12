@@ -27,7 +27,7 @@ export function pdfUrl(value: string) {
     (httpsUrl(value) && new URL(value).pathname.toLowerCase().endsWith('.pdf'))
   );
 }
-export function validateEnquiry(input: unknown) {
+export function validateEnquiry(input: unknown, allowedServices: readonly string[] = services) {
   if (!input || typeof input !== 'object' || Array.isArray(input))
     throw new Error('Invalid enquiry.');
   const data = input as Record<string, unknown>;
@@ -44,7 +44,7 @@ export function validateEnquiry(input: unknown) {
   const phone = text('phone', 0, 32);
   if (phone && !/^\+?[0-9 ()-]{7,32}$/.test(phone)) throw new Error('Enter a valid phone number.');
   const service = text('service', 1, 30);
-  if (!(services as readonly string[]).includes(service)) throw new Error('Choose a service.');
+  if (!slugPattern.test(service) || !allowedServices.includes(service)) throw new Error('Choose a service.');
   const budget = text('budget', 1, 120);
   const description = text('description', 20, 5000);
   return { fullName, email, phone, service, budget, description };

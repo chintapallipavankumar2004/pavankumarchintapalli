@@ -182,13 +182,39 @@ test('real enquiry transactions persist once under concurrent retries and remain
     const db = getFirestore(app);
     process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
     process.env.ENQUIRY_RATE_LIMIT_SECRET = 'emulator-test-only';
-    const handler = createEnquiryHandler(() => ({ db, appCheck: { verifyToken: async () => ({}) } }) as unknown as Services);
+    const handler = createEnquiryHandler(
+      () => ({ db, appCheck: { verifyToken: async () => ({}) } }) as unknown as Services,
+    );
     const id = '00000000-0000-4000-8000-000000000042';
     const send = async () => {
       let status = 0;
-      const req = { method: 'POST', headers: { origin: 'http://localhost:3000', 'content-type': 'application/json', 'x-firebase-appcheck': 'emulated' }, socket: { remoteAddress: '127.0.0.1' }, body: { id, fullName: 'Test Visitor', email: 'visitor@example.com', phone: '', service: 'website', budget: 'Not specified', description: 'Please help me build a business website.' } } as unknown as Request;
-      const res = { setHeader: () => {}, set statusCode(value: number) { status = value; }, end: () => {} } as unknown as Response;
-      await handler(req, res); return status;
+      const req = {
+        method: 'POST',
+        headers: {
+          origin: 'http://localhost:3000',
+          'content-type': 'application/json',
+          'x-firebase-appcheck': 'emulated',
+        },
+        socket: { remoteAddress: '127.0.0.1' },
+        body: {
+          id,
+          fullName: 'Test Visitor',
+          email: 'visitor@example.com',
+          phone: '',
+          service: 'website',
+          budget: 'Not specified',
+          description: 'Please help me build a business website.',
+        },
+      } as unknown as Request;
+      const res = {
+        setHeader: () => {},
+        set statusCode(value: number) {
+          status = value;
+        },
+        end: () => {},
+      } as unknown as Response;
+      await handler(req, res);
+      return status;
     };
     assert.deepEqual(await Promise.all([send(), send()]), [201, 201]);
     const saved = await db.doc(`enquiries/${id}`).get();
@@ -196,7 +222,10 @@ test('real enquiry transactions persist once under concurrent retries and remain
     assert.equal(saved.data()?.status, 'new');
     assert.ok(saved.data()?.createdAt.toMillis() > 0);
     const limits = await db.collection('enquiryLimits').get();
-    assert.equal(limits.size, 1); assert.equal(limits.docs[0].data().count, 1);
+    assert.equal(limits.size, 1);
+    assert.equal(limits.docs[0].data().count, 1);
     await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'enquiries', id)));
-  } finally { await deleteApp(app); }
+  } finally {
+    await deleteApp(app);
+  }
 });

@@ -13,6 +13,7 @@
     "test:rules:run": "node --experimental-require-module --import tsx --test tests/firestore.rules.test.ts",
     "test:browser": "node scripts/run-rules.cjs --browser",
     "admin:provision": "node --experimental-require-module --env-file=.env.local --import tsx scripts/provision-admin.ts"
+    ,"cms:seed": "node --experimental-require-module --env-file=.env.local --import tsx scripts/seed-cms.ts"
   },
   "engines": {
     "node": "22.x"

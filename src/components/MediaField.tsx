@@ -47,7 +47,7 @@ export function MediaField({
             onBusy(true);
             setError('');
             try {
-              onChange(await uploadMedia(file, kind));
+              onChange((await uploadMedia(file, kind)).secureUrl);
             } catch (error) {
               setError(error instanceof Error ? error.message : 'Upload failed.');
             } finally {

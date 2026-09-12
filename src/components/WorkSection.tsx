@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Project } from '../types';
 import { ArrowRight, ExternalLink, Lock, RotateCw, CheckCircle2 } from 'lucide-react';
+import { useContent } from '../lib/content';
 
 interface WorkSectionProps {
   projects: Project[];
@@ -9,32 +10,15 @@ interface WorkSectionProps {
 }
 
 export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProject }) => {
-  const [activeCategory, setActiveCategory] = useState<string>('websites');
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+  const { categories: managedCategories } = useContent();
 
   projects = projects.filter((project) => project.status === 'published');
-  const categories = [
-    { id: 'all', label: 'All' },
-    {
-      id: 'websites',
-      label: 'Websites',
-      count: projects.filter((p) => p.category === 'website').length,
-    },
-    { id: 'posters', label: 'Posters' },
-    { id: 'logos', label: 'Logos' },
-    { id: 'automations', label: 'Automations' },
-    { id: 'apps', label: 'Apps' },
-    { id: 'webapps', label: 'Web Applications' },
-  ];
+  const categories = [{id:'all',label:'All',count:projects.length},...managedCategories.map(category=>({id:category.id,label:category.name,count:projects.filter(p=>p.category===category.id||p.category===category.id.replace(/s$/,'')).length})).filter(category=>category.count>0)];
 
   const filteredProjects = projects.filter((project) => {
     if (activeCategory === 'all') return true;
-    if (activeCategory === 'websites') return project.category === 'website';
-    if (activeCategory === 'posters') return project.category === 'poster';
-    if (activeCategory === 'logos') return project.category === 'logo';
-    if (activeCategory === 'automations') return project.category === 'automation';
-    if (activeCategory === 'apps') return project.category === 'app';
-    if (activeCategory === 'webapps') return project.category === 'webapp';
-    return true;
+    return project.category === activeCategory || project.category === activeCategory.replace(/s$/,'');
   });
 
   return (

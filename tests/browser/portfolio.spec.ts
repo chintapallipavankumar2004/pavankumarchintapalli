@@ -55,6 +55,7 @@ test.beforeAll(async () => {
       status: 'draft',
       order: 1,
     });
+    await setDoc(doc(db, 'services/webapp'), { id:'webapp', title:'Web Applications', description:'Test service', iconName:'terminal', features:['Dashboards'], order:0, published:true, schemaVersion:1, updatedAt:Timestamp.now(), updatedBy:account.localId });
   });
 });
 test.afterAll(async () => {

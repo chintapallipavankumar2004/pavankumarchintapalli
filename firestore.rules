@@ -45,12 +45,52 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
       allow delete: if admin();
     }
+    function cmsBase(d) {
+      return d.id is string && d.id.size() > 0 && d.id.size() <= 80
+        && d.order is int && d.order >= 0 && d.order <= 10000
+        && d.published is bool && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid && d.schemaVersion == 1;
+    }
+    match /siteContent/{id} {
+      allow read: if id == 'general';
+      allow create, update: if admin() && id == 'general'
+        && request.resource.data.keys().hasOnly(['schemaVersion','name','shortName','initials','professionalTitle','roleHeadline','heroEyebrow','heroDescription','primaryCtaLabel','secondaryCtaLabel','aboutHeading','biography','aboutSupporting','contactHeading','contactDescription','email','phone','whatsapp','github','linkedin','location','timezone','footerWordmark','footerDescription','copyrightText','sectionOrder','sectionVisibility','siteTitle','metaDescription','ogTitle','ogDescription','ogImage','canonicalUrl','indexingEnabled','accent','cardStyle','mediaIds','updatedAt','updatedBy'])
+        && request.resource.data.schemaVersion == 1 && request.resource.data.updatedAt == request.time && request.resource.data.updatedBy == request.auth.uid
+        && text(request.resource.data,'name',120) && text(request.resource.data,'email',254) && text(request.resource.data,'metaDescription',320)
+        && request.resource.data.sectionOrder is list && request.resource.data.sectionOrder.size() <= 8
+        && request.resource.data.indexingEnabled is bool;
+      allow delete: if false;
+    }
+    match /categories/{id} {
+      allow read: if resource.data.published == true || admin();
+      allow create, update: if admin() && cmsBase(request.resource.data) && request.resource.data.keys().hasOnly(['id','name','slug','description','iconName','order','published','mediaLayout','accent','updatedAt','updatedBy','schemaVersion']) && request.resource.data.id == id && request.resource.data.slug == id && text(request.resource.data,'name',80);
+      allow delete: if admin();
+    }
+    match /services/{id} {
+      allow read: if resource.data.published == true || admin();
+      allow create, update: if admin() && cmsBase(request.resource.data) && request.resource.data.keys().hasOnly(['id','title','description','iconName','features','order','published','updatedAt','updatedBy','schemaVersion']) && request.resource.data.id == id && text(request.resource.data,'title',120) && request.resource.data.features is list && request.resource.data.features.size() <= 3;
+      allow delete: if admin();
+    }
+    match /skills/{id} {
+      allow read: if resource.data.published == true || admin();
+      allow create, update: if admin() && cmsBase(request.resource.data) && request.resource.data.keys().hasOnly(['id','name','group','iconName','order','published','updatedAt','updatedBy','schemaVersion']) && request.resource.data.id == id && text(request.resource.data,'name',80) && text(request.resource.data,'group',80);
+      allow delete: if admin();
+    }
+    match /process/{id} {
+      allow read: if resource.data.published == true || admin();
+      allow create, update: if admin() && cmsBase(request.resource.data) && request.resource.data.keys().hasOnly(['id','title','description','order','published','updatedAt','updatedBy','schemaVersion']) && request.resource.data.id == id && text(request.resource.data,'title',120) && text(request.resource.data,'description',600);
+      allow delete: if admin();
+    }
+    match /media/{id} { allow read: if admin(); allow write: if false; }
+    match /auditLogs/{id} { allow read: if admin(); allow create: if admin() && request.resource.data.adminUid == request.auth.uid && request.resource.data.createdAt == request.time; allow update, delete: if false; }
+    match /contentRevisions/{id} { allow read: if admin(); allow create: if admin() && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time; allow update, delete: if false; }
+    match /cleanupJobs/{id} { allow read: if admin(); allow write: if false; }
     match /enquiries/{id} {
       // Creation goes through /api/enquiries with App Check and rate limiting.
       allow create: if false;
       allow read, delete: if admin();
-      allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status in ['new','reviewed','contacted'];
+      allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','internalNote','updatedAt'])
+        && request.resource.data.status in ['new','read','reviewed','contacted','closed'] && optionalText(request.resource.data,'internalNote',2000);
     }
     match /{document=**} { allow read, write: if false; }
   }

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Project, Enquiry, ViewMode } from '../types';
 import { SettingsPanel } from './SettingsPanel';
+import { CmsManager } from './CmsManager';
 import { PROFILE_INFO } from '../data/initialData';
 
 interface AdminDashboardViewProps {
@@ -49,7 +50,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onReorder,
   onEnquiryStatus,
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'enquiries' | 'settings'>(
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'projects' | 'enquiries' | 'settings' | 'content' | 'categories' | 'services' | 'skills' | 'process' | 'media' | 'seo'>(
     'dashboard',
   );
   const [searchQuery, setSearchQuery] = useState('');
@@ -108,6 +109,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <LayoutDashboard className="w-4 h-4" />
               <span>Dashboard</span>
             </button>
+            <label className="block px-3 pt-3 text-[10px] uppercase tracking-wider text-[#777587]">Manage website
+              <select aria-label="Admin section" value={['dashboard','projects','enquiries','settings'].includes(activeTab)?'':activeTab} onChange={e=>e.target.value&&setActiveTab(e.target.value as any)} className="mt-1 w-full h-9 border border-[#c8c4d8] rounded-lg bg-white px-2 text-xs normal-case">
+                <option value="">Choose section…</option><option value="content">Website Content</option><option value="categories">Categories</option><option value="services">Services</option><option value="skills">Skills</option><option value="process">Process</option><option value="media">Media</option><option value="seo">SEO & Social</option>
+              </select>
+            </label>
 
             <button
               id="admin-tab-proj"
@@ -288,7 +294,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
 
         {/* Tab View: Inbound Enquiries */}
-        {activeTab === 'settings' ? (
+        {['content','categories','services','skills','process','media','seo'].includes(activeTab) ? (
+          <CmsManager area={activeTab as any} />
+        ) : activeTab === 'settings' ? (
           <SettingsPanel />
         ) : activeTab === 'enquiries' ? (
           <div className="bg-white border border-[#c8c4d8] rounded-2xl overflow-hidden shadow-xs">

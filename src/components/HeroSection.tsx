@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowDown, CheckCircle2 } from 'lucide-react';
 import { useSettings } from '../lib/settings';
-import { PROFILE_INFO } from '../data/initialData';
+import { useContent } from '../lib/content';
 
 interface HeroSectionProps {
   onViewWork: () => void;
@@ -10,6 +10,7 @@ interface HeroSectionProps {
 
 export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartProject }) => {
   const settings = useSettings();
+  const { content } = useContent();
   return (
     <section id="hero" className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden">
       <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
@@ -36,17 +37,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
           {/* Main Heading & Title */}
           <div className="space-y-2">
             <p className="text-[#422cd8] text-sm md:text-base uppercase tracking-wider font-bold">
-              {PROFILE_INFO.name}
+              {content.name}
             </p>
             <h1 className="text-4xl md:text-5xl lg:text-[56px] font-bold text-[#141b2b] tracking-tight leading-[1.12]">
-              {PROFILE_INFO.title}
+              {content.professionalTitle}
             </h1>
           </div>
 
           {/* Value Proposition Subtitle */}
           <p className="text-lg md:text-xl text-[#474555] max-w-xl leading-relaxed font-normal">
-            I build websites, web applications, and business solutions for startups and growing
-            businesses with clean engineering and sharp execution.
+            {content.heroDescription}
           </p>
 
           {/* Dual Action CTAs */}
@@ -57,7 +57,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
               onClick={onViewWork}
               className="inline-flex items-center justify-center h-12 px-7 rounded-lg bg-[#5b4cf0] text-white text-[15px] font-semibold hover:bg-[#422cd8] transition-all duration-200 shadow-sm hover:shadow active:scale-[0.98] gap-2 cursor-pointer"
             >
-              <span>View My Work</span>
+              <span>{content.primaryCtaLabel}</span>
               <ArrowDown className="w-4 h-4" />
             </button>
             <button
@@ -66,7 +66,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
               onClick={onStartProject}
               className="inline-flex items-center justify-center h-12 px-6 rounded-lg bg-white border border-[#c8c4d8] hover:border-[#777587] text-[#141b2b] text-[15px] font-semibold hover:bg-[#f1f3ff] transition-all duration-200 shadow-xs active:scale-[0.98] cursor-pointer"
             >
-              Start a Project
+              {content.secondaryCtaLabel}
             </button>
           </div>
 
@@ -99,7 +99,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
                 {/* Headshot Image */}
                 <img
                   id="hero-profile-avatar"
-                  alt="Chintapalli Pavan Kumar avatar profile portrait"
+                  alt={`${content.name} profile portrait`}
                   src={settings.headshot}
                   className="w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-500"
                 />
@@ -107,8 +107,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
                 {/* Floating badge over portrait */}
                 <div className="absolute bottom-3 left-3 right-3 p-3 bg-white/90 backdrop-blur-md rounded-lg border border-[#c8c4d8]/40 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-bold text-[#141b2b]">{PROFILE_INFO.shortName}</p>
-                    <p className="text-xs text-[#474555]">{PROFILE_INFO.roleHeadline}</p>
+                    <p className="text-sm font-bold text-[#141b2b]">{content.shortName}</p>
+                    <p className="text-xs text-[#474555]">{content.roleHeadline}</p>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-[#5b4cf0]/10 flex items-center justify-center text-[#422cd8]">
                     <CheckCircle2 className="w-5 h-5 fill-[#5b4cf0]/20" />
@@ -120,9 +120,9 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
               <div className="mt-3 px-2 flex items-center justify-between text-xs text-[#474555]">
                 <span className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#5b4cf0]"></span>
-                  {PROFILE_INFO.location}
+                  {content.location}
                 </span>
-                <span className="text-xs text-[#777587] font-mono">{PROFILE_INFO.timezone}</span>
+                <span className="text-xs text-[#777587] font-mono">{content.timezone}</span>
               </div>
             </div>
           </div>

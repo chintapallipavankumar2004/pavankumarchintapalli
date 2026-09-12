@@ -31,6 +31,7 @@ export const SERVICES: ServiceItem[] = [
       'Mobile-First Optimization',
       'SEO & Speed Best Practices',
     ],
+    order: 0, published: true,
   },
   {
     id: 'webapp',
@@ -43,6 +44,7 @@ export const SERVICES: ServiceItem[] = [
       'Authentication & RBAC Control',
       'RESTful API Integrations',
     ],
+    order: 1, published: true,
   },
   {
     id: 'branding',
@@ -55,6 +57,7 @@ export const SERVICES: ServiceItem[] = [
       'High-Impact Campaign Posters',
       'Social Media Design Kits',
     ],
+    order: 2, published: true,
   },
   {
     id: 'automation',
@@ -67,6 +70,7 @@ export const SERVICES: ServiceItem[] = [
       'Database & Cloud Migration',
       'Dedicated Retainer Support',
     ],
+    order: 3, published: true,
   },
 ];
 

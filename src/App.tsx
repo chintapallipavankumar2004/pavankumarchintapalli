@@ -1,10 +1,12 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import type { Project, Enquiry } from './types';
+import type { Project, Enquiry, SiteContent, ServiceItem, SkillItem, ProcessItem, CategoryItem } from './types';
 import { auth, db, firebaseConfigured } from './lib/firebase';
 import * as repository from './lib/repository';
 import { SettingsContext, defaultSettings } from './lib/settings';
+import { ContentContext } from './lib/content';
+import { defaultContent } from './data/defaultContent';
 import { parseRoute } from './lib/routes';
 import { TopNavbar } from './components/TopNavbar';
 import { HeroSection } from './components/HeroSection';
@@ -39,6 +41,11 @@ export default function App() {
   const [adminProjects, setAdminProjects] = useState<Project[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [settings, setSettings] = useState(defaultSettings);
+  const [content,setContent]=useState<SiteContent>(defaultContent);
+  const [publicServices,setPublicServices]=useState<ServiceItem[]>([]);
+  const [publicSkills,setPublicSkills]=useState<SkillItem[]>([]);
+  const [publicProcess,setPublicProcess]=useState<ProcessItem[]>([]);
+  const [publicCategories,setPublicCategories]=useState<CategoryItem[]>([]);
   const [publicLoading, setPublicLoading] = useState(firebaseConfigured);
   const [adminLoading, setAdminLoading] = useState(false);
   const [publicError, setPublicError] = useState('');
@@ -106,6 +113,8 @@ export default function App() {
       },
     );
   }, []);
+  useEffect(()=>{if(!db)return;const fail=()=>setPublicError('Website content is temporarily unavailable.');return repository.watchSiteContent(setContent,fail)},[]);
+  useEffect(()=>{if(!db)return;const fail=()=>setPublicError('Website content is temporarily unavailable.');const stops=[repository.watchCmsCollection<ServiceItem>('services',false,setPublicServices,fail),repository.watchCmsCollection<SkillItem>('skills',false,setPublicSkills,fail),repository.watchCmsCollection<ProcessItem>('process',false,setPublicProcess,fail),repository.watchCmsCollection<CategoryItem>('categories',false,setPublicCategories,fail)];return()=>stops.forEach(stop=>stop())},[]);
   useEffect(() => {
     if (!db) return;
     return repository.watchSettings(
@@ -184,13 +193,13 @@ export default function App() {
   useEffect(() => {
     document.title = project
       ? `${project.title} | Pavan Kumar`
-      : 'Chintapalli Pavan Kumar | Portfolio';
+      : content.siteTitle;
     document
       .querySelector('meta[name="description"]')
       ?.setAttribute(
         'content',
         project?.summary ||
-          'Software developer and freelancer. Projects, services and contact details.',
+          content.metaDescription,
       );
     let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
     if (!robots) {
@@ -198,8 +207,8 @@ export default function App() {
       robots.name = 'robots';
       document.head.appendChild(robots);
     }
-    robots.content = adminRoute || route.kind === 'missing' ? 'noindex, nofollow' : 'index, follow';
-  }, [project, adminRoute, route.kind]);
+    robots.content = adminRoute || route.kind === 'missing' || !content.indexingEnabled ? 'noindex, nofollow' : 'index, follow';
+  }, [project, adminRoute, route.kind, content]);
   const notice = (message: string) => (
     <div className="max-w-7xl mx-auto px-6 py-8" role="status">
       {message}
@@ -207,6 +216,7 @@ export default function App() {
   );
   return (
     <SettingsContext.Provider value={settings}>
+      <ContentContext.Provider value={{content,services:publicServices,skills:publicSkills,process:publicProcess,categories:publicCategories}}>
       <div className="min-h-screen bg-[#f9f9ff] text-[#141b2b] flex flex-col font-sans">
         <Suspense fallback={notice('Loading…')}>
           {adminRoute ? (
@@ -345,6 +355,7 @@ export default function App() {
           )}
         </Suspense>
       </div>
+      </ContentContext.Provider>
     </SettingsContext.Provider>
   );
 }

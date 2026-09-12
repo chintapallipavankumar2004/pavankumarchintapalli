@@ -1,12 +1,13 @@
 import React from 'react';
 import { Laptop, Terminal, Palette, RefreshCw, Check, ArrowRight } from 'lucide-react';
-import { SERVICES } from '../data/initialData';
+import { useContent } from '../lib/content';
 
 interface ServicesSectionProps {
   onSelectService: (serviceId: string) => void;
 }
 
 export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectService }) => {
+  const { services } = useContent();
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'laptop':
@@ -40,7 +41,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
 
         {/* 4 Service Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {SERVICES.map((service) => {
+          {services.map((service) => {
             const Icon = getIcon(service.iconName);
             return (
               <div

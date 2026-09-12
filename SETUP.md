@@ -2,6 +2,8 @@
 
 This project keeps the React/Vite/Tailwind presentation and adds Firebase Authentication, Cloud Firestore, and two Vercel Node serverless endpoints. The code alone does not create a Firebase project, deploy rules, register App Check, configure Cloudinary, or supply a resume PDF.
 
+See [VALIDATION.md](VALIDATION.md) for completed local checks and remaining live setup. Inter and Plus Jakarta Sans are bundled locally with the same font families and weights; rendering does not depend on a Google Fonts request. A scoped `gaxios@6.7.1` UUID override resolves the inherited production advisory, with a compatibility test for its multipart request generation.
+
 ## 1. Requirements and local configuration
 
 - Node.js 22 (22.12+; development validated with 22.22.2).
@@ -66,7 +68,7 @@ The browser supplies a random submission ID. Retrying unchanged content after a 
 6. If PDF delivery is blocked in your Cloudinary account, enable **Allow delivery of PDF and ZIP files** under the product environment's Security settings. Confirm your uploaded PDF opens from a signed-out browser.
 7. In `/admin`, add/edit a project to upload its image, optional thumbnail and banner. Settings provides hero and resume uploads. A completed upload fills the URL; press Save to persist it. Upload failure does not save the record.
 
-Uploaded images use ordinary public Cloudinary delivery URLs. Draft project records/routes are private, but a media URL already known outside the app is not an authenticated private media URL. Do not upload confidential assets. Deleting a project does not delete Cloudinary files because assets may be shared by duplicated projects. Remove unused/orphaned uploads manually in Cloudinary after checking references; cancelled edits can leave unused media.
+Uploaded images use ordinary public Cloudinary delivery URLs. Draft records are private, but a known delivery URL is not confidential. After upload, `/api/cloudinary/complete` validates the result and registers its public ID and ownership in `media`. `/api/cloudinary/delete` checks references, deletes only managed assets by public ID with CDN invalidation, and creates a retryable `cleanupJobs` record when Cloudinary fails. External and local-static records are reference-only.
 
 ## 5. Resume PDF and portfolio content
 
@@ -75,7 +77,7 @@ Uploaded images use ordinary public Cloudinary delivery URLs. Draft project reco
 - You may also save a direct HTTPS URL ending in `.pdf`. Confirm the file is actually a PDF and is publicly readable. Remote files may open in a browser PDF viewer depending on its download behavior.
 - No real PDF was included in this checkout. Until one is supplied/configured, the control says Resume unavailable. It does not generate a text file or pretend a PDF was downloaded.
 - The provided Cloudinary hero photo remains the default. Persisted settings override it.
-- Profile identity/contact links, services, toolkit and process text remain in `src/data/initialData.ts`. Hero photo, resume URL, availability, booking window and response text are editable Firestore settings. Optional date/availability promises default to blank.
+- Identity, contact, SEO, services, skills, process and categories are managed in Firestore. Hero photo, resume URL and availability fields remain in `settings/public`. Run `npm run cms:seed` once after credentials and the admin grant are ready; it creates only missing documents and preserves existing data. Re-running it is safe.
 - Add reviewed projects through Admin. Slugs become document IDs and `/projects/{slug}` URLs; slugs are immutable after creation to keep links stable. Creating a duplicate generates a new slug and always starts as a private draft.
 - Publication only indicates visibility on this portfolio. It does not deploy a client's site. There are no default performance scores, sample project narratives, manufactured delivery dates or fake sync indicators.
 - Reorder controls atomically update display order. Public pages query `status == published`; admin preview URLs are `/admin/preview/{slug}` and require authorization. Unpublishing removes the public route's content. No draft content is placed in page HTML or bundled seed data.
@@ -102,6 +104,16 @@ Architecture/data map:
 | `settings/public`        | Public photo/PDF URLs and optional availability text; admin writes only                             |
 | `enquiries/{uuid}`       | Contact details, message, status, server timestamp, retry-content HMAC; admin reads only            |
 | `enquiryLimits/{ipHmac}` | Server-only rate counters and TTL; no client reads/writes                                           |
+| `siteContent/general` | Public identity, hero, about, contact, footer, section and SEO fields |
+| `categories`, `services`, `skills`, `process` | Published public records and private admin drafts |
+| `media` | Server-created Cloudinary metadata and ownership |
+| `auditLogs`, `contentRevisions`, `cleanupJobs` | Private admin history, snapshots and retry work |
+
+### Backup, rollback and cleanup
+
+Export Firestore before a destructive content migration (`gcloud firestore export gs://YOUR_BACKUP_BUCKET/PATH`) and retain the matching Cloudinary asset list. The seed is create-only, so rollback consists of restoring the export or removing only newly seeded documents after verifying their IDs. Code rollback uses the prior Git revision followed by a Vercel redeploy; rules rollback uses the previous checked-in `firestore.rules` and `firebase deploy --only firestore:rules`.
+
+Failed Cloudinary removals appear in `cleanupJobs`. Confirm project/content references are gone before retrying from an authorized server operation. Keep the job and media metadata until Cloudinary returns `ok` or the exact public ID returns `not found`.
 
 No Firebase Hosting deployment is required: Vercel hosts the app/functions; Firebase hosts Authentication and Firestore. Routes are client-rendered; shareable project URLs load correctly on refresh, but per-project social-card previews and server-rendered SEO are not implemented. An unavailable project shows an in-app not-found state; the SPA fallback itself still returns HTTP 200. Admin routes send `X-Robots-Tag: noindex, nofollow` and render no private content before auth.
 
