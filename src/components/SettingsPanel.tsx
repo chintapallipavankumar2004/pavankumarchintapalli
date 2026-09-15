@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSettings } from '../lib/settings';
 import { saveSettings } from '../lib/repository';
 import { MediaField } from './MediaField';
@@ -9,6 +9,10 @@ export function SettingsPanel() {
   const [uploads, setUploads] = useState(0);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState(JSON.stringify(settings));
+  const [lastSaved, setLastSaved] = useState('Not saved in this session');
+  const dirty = JSON.stringify(draft) !== saved;
+  useEffect(() => { if (!dirty) { setDraft(settings); setSaved(JSON.stringify(settings)); } }, [settings]);
   const onBusy = (value: boolean) => setUploads((n) => n + (value ? 1 : -1));
   return (
     <form
@@ -22,6 +26,8 @@ export function SettingsPanel() {
         try {
           await saveSettings(draft);
           setMessage('Settings saved.');
+          setSaved(JSON.stringify(draft));
+          setLastSaved(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         } catch (error) {
           setError(error instanceof Error ? error.message : 'Settings could not be saved.');
         } finally {
@@ -29,7 +35,7 @@ export function SettingsPanel() {
         }
       }}
     >
-      <h2 className="text-xl font-bold">Portfolio Settings</h2>
+      <div><h2 className="text-lg font-bold">Portfolio media and availability</h2><p className="text-xs text-[#474555]">{dirty ? 'Unsaved changes' : 'All settings saved'} · Last saved: {lastSaved}</p></div>
       <fieldset disabled={busy} className="space-y-5">
         <MediaField
           label="Hero photo"

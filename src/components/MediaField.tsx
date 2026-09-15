@@ -1,26 +1,36 @@
 import React, { useState } from 'react';
 import { uploadMedia } from '../lib/uploads';
+import type { MediaAsset, ProjectCategory } from '../types';
+import { PROJECT_CATEGORIES, significantRatioDifference } from '../lib/projects';
 export function MediaField({
   label,
   value,
   onChange,
   kind = 'image',
   onBusy,
+  onUploaded,
+  category,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   kind?: 'image' | 'resume';
   onBusy: (value: boolean) => void;
+  onUploaded?: (asset: MediaAsset) => void;
+  category?: ProjectCategory;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const id = React.useId();
   return (
     <div className="space-y-2">
       <label htmlFor={id} className="block font-semibold">
         {label}
       </label>
+      {kind === 'image' && category && (
+        <p className="text-xs text-[#474555]">{PROJECT_CATEGORIES[category].guidance}. Keep the original proportions; never stretch the image.</p>
+      )}
       <input
         id={id}
         type="text"
@@ -46,8 +56,18 @@ export function MediaField({
             setBusy(true);
             onBusy(true);
             setError('');
+            setWarning('');
             try {
-              onChange((await uploadMedia(file, kind)).secureUrl);
+              if (kind === 'image' && category) {
+                try {
+                  const bitmap = await createImageBitmap(file);
+                  if (significantRatioDifference(bitmap.width, bitmap.height, category)) setWarning(`This image differs from the recommended ${PROJECT_CATEGORIES[category].guidance} ratio. It is valid and will be shown without cropping.`);
+                  bitmap.close();
+                } catch { /* The upload endpoint remains the source of file validation. */ }
+              }
+              const asset = await uploadMedia(file, kind);
+              onChange(asset.secureUrl);
+              onUploaded?.(asset);
             } catch (error) {
               setError(error instanceof Error ? error.message : 'Upload failed.');
             } finally {
@@ -62,6 +82,7 @@ export function MediaField({
           {error}
         </p>
       )}
+      {warning && <p role="status" className="text-amber-800 text-sm">{warning}</p>}
       {kind === 'image' && value.startsWith('https://') && (
         <img
           src={value}

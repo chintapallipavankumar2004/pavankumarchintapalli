@@ -2,10 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { validateEnquiry, slugify, httpsUrl, pdfUrl } from '../src/lib/validation';
 import { parseRoute } from '../src/lib/routes';
 import { signUpload } from '../server/signature';
-import { createSignHandler, createEnquiryHandler, type Services } from '../server/handlers';
+import { createSignHandler, createEnquiryHandler, createMediaDeleteHandler, type Services } from '../server/handlers';
+import { normalizeProject, projectCta, projectWriteFields, removedManagedMediaIds, sanitizeCategoryFields, significantRatioDifference } from '../src/lib/projects';
 import type { Request, Response } from '../server/http';
 
 const valid = {
@@ -107,6 +109,28 @@ function fixture(uid = 'owner', tokenValid = true, appCheckValid = true) {
       },
     }) as unknown as Services;
   return { services, documents, checked: () => revocationChecked };
+}
+
+function mediaFixture(referenced = false) {
+  const documents = new Map<string, any>([
+    ['access/admin',{uid:'owner'}],
+    ['media/managed',{assetId:'managed',publicId:'portfolio/image/managed',resourceType:'image',ownership:'cloudinary-managed'}],
+  ]);
+  let audit=0;
+  const ref=(path:string)=>({path,get:async()=>({exists:documents.has(path),data:()=>documents.get(path)}),set:async(value:any)=>documents.set(path,value),delete:async()=>documents.delete(path)});
+  const services=()=>({
+    auth:{verifyIdToken:async()=>({uid:'owner'}),getUser:async()=>({customClaims:{admin:true}})},
+    appCheck:{verifyToken:async()=>({})},
+    db:{
+      doc:ref,
+      collection:(name:string)=>({
+        doc:(id?:string)=>ref(`${name}/${id||`generated-${++audit}`}`),
+        where:()=>({limit:()=>({get:async()=>({empty:!referenced})})}),
+      }),
+      runTransaction:async(callback:any)=>callback({delete:(target:any)=>documents.delete(target.path),set:(target:any,value:any)=>documents.set(target.path,value)}),
+    },
+  }) as unknown as Services;
+  return {services,documents};
 }
 
 test('validation trims input and rejects malformed or oversized enquiries', () => {
@@ -270,4 +294,67 @@ test('backend errors fail closed without leaking internal errors', async () => {
   );
   assert.equal(result.status, 503);
   assert.equal(JSON.stringify(result).includes('private-secret'), false);
+});
+
+test('legacy single images migrate idempotently into an ordered cover gallery', () => {
+  const first = normalizeProject({ id:'legacy', slug:'legacy', title:'Legacy project', category:'website', categoryLabel:'Websites', tag:'Websites', summary:'Summary', role:'', status:'published', order:0, lastUpdated:'', image:'https://example.com/legacy.png', technologies:['React'], liveUrl:'https://example.com' });
+  const second = normalizeProject(first as typeof first & Record<string, unknown>);
+  assert.equal(first.gallery.length, 1);
+  assert.equal(first.gallery[0].url, 'https://example.com/legacy.png');
+  assert.equal(first.coverImageId, first.gallery[0].id);
+  assert.deepEqual(second.gallery, first.gallery);
+  assert.deepEqual(first.categoryFields.technologies, ['React']);
+});
+
+test('gallery writes enforce limits, stable ordering, cover selection and managed identifiers', () => {
+  const project = normalizeProject({ id:'gallery', slug:'gallery', title:'Gallery', category:'website', categoryLabel:'Websites', tag:'Websites', summary:'Summary', role:'', status:'draft', order:0, lastUpdated:'', categoryFields:{technologies:['React']}, gallery:[{id:'second',url:'https://example.com/2.png',alt:'Second',order:2,ownership:'external'},{id:'first',url:'https://example.com/1.png',alt:'First',order:0,ownership:'external'}], coverImageId:'second', mediaIds:[], schemaVersion:2 });
+  assert.deepEqual(project.gallery.map((item) => item.id), ['first','second']);
+  assert.equal(project.coverImageId, 'second');
+  assert.throws(() => projectWriteFields({ ...project, gallery: [...project.gallery, ...[3,4,5,6].map((number) => ({ id:String(number),url:`https://example.com/${number}.png`,alt:String(number),order:number,ownership:'external' as const }))] }), /between 1 and 5/);
+  assert.throws(() => projectWriteFields({ ...project, gallery:[{id:'managed',url:'https://example.com/m.png',alt:'Managed',order:0,ownership:'cloudinary-managed'}], coverImageId:'managed' }), /media identifiers/);
+});
+
+test('category configuration clears incompatible data and exposes only valid contextual CTAs', () => {
+  assert.deepEqual(sanitizeCategoryFields('logo',{liveUrl:'https://example.com',designStyle:'Minimal'}),{designStyle:'Minimal'});
+  const logo=normalizeProject({id:'logo',slug:'logo',title:'Logo',category:'logo',summary:'Summary',role:'',status:'published',order:0,lastUpdated:'',categoryFields:{designStyle:'Minimal'},gallery:[{id:'one',url:'https://example.com/logo.png',alt:'Logo mark',order:0,ownership:'external'}],coverImageId:'one',mediaIds:[],schemaVersion:2});
+  assert.equal(projectCta(logo),null);
+  const site=normalizeProject({...logo,id:'site',slug:'site',category:'website',categoryFields:{liveUrl:'https://example.com'}});
+  assert.deepEqual(projectCta(site),{label:'Visit Website',url:'https://example.com'});
+  assert.equal(significantRatioDifference(1600,900,'website'),false);
+  assert.equal(significantRatioDifference(900,1600,'website'),true);
+});
+
+test('public project media contains no fake browser chrome or case-study banner rendering', () => {
+  const work=readFileSync('src/components/WorkSection.tsx','utf8');
+  const detail=readFileSync('src/components/ProjectDetailView.tsx','utf8');
+  const editor=readFileSync('src/components/ProjectModal.tsx','utf8');
+  const admin=readFileSync('src/components/AdminDashboardView.tsx','utf8');
+  assert.equal(/Browser Header Bar|RotateCw|project\.liveUrl \|\| project\.title/.test(work),false);
+  assert.equal(/bannerImage/.test(detail),false);
+  assert.equal(/Case study banner/.test(editor),false);
+  assert.equal(/New Project Entry|btn-sidebar-add-project|Project Table/.test(admin),false);
+});
+
+test('replacement cleanup selects only removed managed assets after the new project state exists', () => {
+  const previous=normalizeProject({id:'p',slug:'p',title:'P',category:'website',summary:'Summary',role:'',status:'draft',order:0,lastUpdated:'',categoryFields:{},gallery:[{id:'old',url:'https://example.com/old.png',alt:'Old',order:0,ownership:'cloudinary-managed',mediaId:'old-media',publicId:'portfolio/image/old'},{id:'shared',url:'https://example.com/shared.png',alt:'Shared',order:1,ownership:'cloudinary-managed',mediaId:'shared-media',publicId:'portfolio/image/shared'}],coverImageId:'old',mediaIds:['old-media','shared-media'],schemaVersion:2});
+  const next=normalizeProject({...previous,gallery:[previous.gallery[1],{id:'new',url:'https://example.com/new.png',alt:'New',order:1,ownership:'cloudinary-managed',mediaId:'new-media',publicId:'portfolio/image/new'}],coverImageId:'new'});
+  assert.deepEqual(removedManagedMediaIds(previous,next),['old-media']);
+});
+
+test('media deletion protects references and creates a retryable cleanup job on Cloudinary failure', async () => {
+  const originalFetch=globalThis.fetch;
+  try {
+    let called=false;
+    globalThis.fetch=async()=>{called=true;return {ok:true,json:async()=>({result:'ok'})} as any};
+    const shared=mediaFixture(true);
+    assert.equal((await invoke(createMediaDeleteHandler(shared.services),{mediaId:'managed'},{authorization:'Bearer owner','x-firebase-appcheck':'check'})).status,409);
+    assert.equal(called,false);
+    assert.equal(shared.documents.has('media/managed'),true);
+
+    globalThis.fetch=async()=>({ok:false,json:async()=>({result:'error'})}) as any;
+    const failed=mediaFixture(false);
+    assert.equal((await invoke(createMediaDeleteHandler(failed.services),{mediaId:'managed'},{authorization:'Bearer owner','x-firebase-appcheck':'check'})).status,502);
+    assert.equal(failed.documents.has('media/managed'),true);
+    assert.equal(failed.documents.get('cleanupJobs/media-managed').kind,'media-delete');
+  } finally { globalThis.fetch=originalFetch; }
 });

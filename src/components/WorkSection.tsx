@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Project } from '../types';
-import { ArrowRight, ExternalLink, Lock, RotateCw, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, ExternalLink } from 'lucide-react';
 import { useContent } from '../lib/content';
+import { ProjectGallery } from './ProjectGallery';
+import { projectCta, projectTechnologies } from '../lib/projects';
 
 interface WorkSectionProps {
   projects: Project[];
@@ -22,7 +24,7 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
   });
 
   return (
-    <section id="work" className="py-20 max-w-7xl mx-auto px-6">
+    <section id="work" className="py-10 sm:py-14 lg:py-18 max-w-[1240px] mx-auto px-4 sm:px-6">
       {/* Section Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
         <div>
@@ -76,7 +78,7 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
       </div>
 
       {/* Projects List */}
-      <div className="space-y-8">
+      <div className="space-y-6">
         {filteredProjects.length === 0 ? (
           <div className="bg-white border border-[#c8c4d8] rounded-2xl p-12 text-center text-[#474555]">
             <p className="text-base font-medium">No projects found in this category yet.</p>
@@ -89,15 +91,18 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
             </button>
           </div>
         ) : (
-          filteredProjects.map((project) => (
+          filteredProjects.map((project) => {
+            const technologies = projectTechnologies(project);
+            const cta = projectCta(project);
+            return (
             <article
               key={project.id}
               id={`project-card-${project.id}`}
-              className="bg-white border border-[#c8c4d8] rounded-2xl p-6 lg:p-8 shadow-sm hover:shadow-md transition-all duration-300"
+              className="bg-white border border-[#c8c4d8] rounded-2xl p-4 sm:p-5 lg:p-6 shadow-sm hover:shadow-md transition-all duration-300"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 items-center">
                 {/* Left Info Column */}
-                <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
+                <div className="lg:col-span-5 flex flex-col justify-between space-y-5">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="px-2.5 py-1 rounded-full bg-[#e9edff] text-[#422cd8] text-xs font-semibold tracking-wide uppercase">
@@ -124,7 +129,7 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
                       Technologies Utilized
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {project.technologies.map((tech, index) => (
+                      {technologies.map((tech, index) => (
                         <span
                           key={index}
                           className="px-3 py-1 rounded-md bg-[#f1f3ff] border border-[#c8c4d8]/60 text-[#141b2b] text-xs font-medium"
@@ -152,54 +157,28 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
                       <ArrowRight className="w-4 h-4" />
                     </a>
 
-                    {project.liveUrl && (
+                    {cta && (
                       <a
                         id={`btn-live-link-${project.id}`}
-                        href={project.liveUrl}
+                        href={cta.url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white border border-[#c8c4d8] text-[#141b2b] hover:bg-[#f1f3ff] transition-all duration-150 text-sm font-semibold gap-1.5 cursor-pointer"
                       >
-                        <span>Live Website</span>
+                        <span>{cta.label}</span>
                         <ExternalLink className="w-4 h-4 text-[#474555]" />
                       </a>
                     )}
                   </div>
                 </div>
 
-                {/* Right Visual Column (Browser Mockup) */}
+                {/* Direct project media, without decorative browser chrome. */}
                 <div className="lg:col-span-7">
-                  <div className="rounded-xl border border-[#c8c4d8]/80 bg-[#1e2330] shadow-lg overflow-hidden">
-                    {/* Browser Header Bar */}
-                    <div className="bg-[#293040] px-4 py-3 flex items-center justify-between border-b border-white/10">
-                      <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-red-500/80"></span>
-                        <span className="w-3 h-3 rounded-full bg-amber-500/80"></span>
-                        <span className="w-3 h-3 rounded-full bg-emerald-500/80"></span>
-                      </div>
-                      <div className="bg-black/40 px-4 py-1 rounded text-xs font-mono text-[#d3daef]/90 flex items-center gap-2 max-w-sm w-full justify-center">
-                        <Lock className="w-3 h-3 text-emerald-400" />
-                        <span className="truncate">{project.liveUrl || project.title}</span>
-                      </div>
-                      <div className="flex items-center text-[#d3daef]">
-                        <RotateCw className="w-3.5 h-3.5" />
-                      </div>
-                    </div>
-
-                    {/* Showcase Preview Image */}
-                    <div className="relative aspect-[16/10] overflow-hidden bg-[#141b2b]">
-                      <img
-                        id={`showcase-img-${project.id}`}
-                        alt={`${project.title} project preview`}
-                        src={project.image}
-                        className="w-full h-full object-cover object-top hover:scale-[1.02] transition-transform duration-500"
-                      />
-                    </div>
-                  </div>
+                  <ProjectGallery project={project} compact />
                 </div>
               </div>
             </article>
-          ))
+          )})
         )}
       </div>
     </section>

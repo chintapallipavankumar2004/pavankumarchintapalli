@@ -8,6 +8,8 @@ import { SettingsContext, defaultSettings } from './lib/settings';
 import { ContentContext } from './lib/content';
 import { defaultContent } from './data/defaultContent';
 import { parseRoute } from './lib/routes';
+import { deleteMedia } from './lib/uploads';
+import { removedManagedMediaIds } from './lib/projects';
 import { TopNavbar } from './components/TopNavbar';
 import { HeroSection } from './components/HeroSection';
 import { TrustStrip } from './components/TrustStrip';
@@ -281,6 +283,7 @@ export default function App() {
                       onEnquiryStatus={(id, status) =>
                         void act(() => repository.setEnquiryStatus(id, status))
                       }
+                      onDeleteEnquiry={(enquiry) => repository.removeEnquiry(enquiry.id)}
                     />
                   </fieldset>
                 )}
@@ -290,7 +293,18 @@ export default function App() {
                     onClose={() => setEditing(undefined)}
                     projectToEdit={editing}
                     nextOrder={Math.max(-1, ...adminProjects.map((p) => p.order)) + 1}
-                    onSave={(p) => repository.saveProject(p, editing === null)}
+                    onSave={async (project) => {
+                      const previous = editing || null;
+                      await repository.saveProject(project, editing === null);
+                      if (!previous) return;
+                      const removed = removedManagedMediaIds(previous, project);
+                      const failures: string[] = [];
+                      for (const mediaId of removed) {
+                        try { await deleteMedia(mediaId); }
+                        catch { failures.push(mediaId); }
+                      }
+                      if (failures.length) setAdminError('Project saved. Some replaced or removed media could not be deleted; shared assets were preserved and Cloudinary failures are available as cleanup jobs.');
+                    }}
                   />
                 )}
                 {deleting && (
@@ -307,12 +321,12 @@ export default function App() {
             <>
               <TopNavbar onNavigateToSection={section} onSwitchView={switchView} />
               <main>
-                <HeroSection
+                {content.sectionVisibility.hero && <HeroSection
                   onViewWork={() => section('work')}
                   onStartProject={() => section('contact')}
-                />
-                <TrustStrip />
-                {publicLoading ? (
+                />}
+                {content.sectionVisibility.hero && <TrustStrip />}
+                {content.sectionVisibility.work && (publicLoading ? (
                   notice('Loading projects…')
                 ) : publicError ? (
                   notice(publicError)
@@ -321,16 +335,16 @@ export default function App() {
                     projects={publicProjects}
                     onSelectProject={(p) => navigate(`/projects/${p.slug}`)}
                   />
-                )}
-                <ServicesSection
+                ))}
+                {content.sectionVisibility.services && <ServicesSection
                   onSelectService={(value) => {
                     setService(value);
                     section('contact');
                   }}
-                />
-                <AboutSection />
-                <ProcessSection />
-                <ContactSection selectedServicePreset={service} />
+                />}
+                {content.sectionVisibility.about && <AboutSection />}
+                {content.sectionVisibility.process && <ProcessSection />}
+                {content.sectionVisibility.contact && <ContactSection selectedServicePreset={service} />}
               </main>
               <Footer onNavigateToSection={section} onSwitchView={switchView} />
             </>

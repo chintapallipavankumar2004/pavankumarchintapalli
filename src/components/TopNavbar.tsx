@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock, Menu, X } from 'lucide-react';
 import { ViewMode } from '../types';
 import { useSettings } from '../lib/settings';
+import { useContent } from '../lib/content';
 
 interface TopNavbarProps {
   onNavigateToSection: (sectionId: string) => void;
@@ -11,6 +12,7 @@ interface TopNavbarProps {
 export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateToSection, onSwitchView }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const settings = useSettings();
+  const { content } = useContent();
 
   const handleNavClick = (sectionId: string) => {
     onNavigateToSection(sectionId);
@@ -22,7 +24,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateToSection, onSwi
       id="main-header"
       className="sticky top-0 z-50 bg-[#f9f9ff]/90 backdrop-blur-md border-b border-[#c8c4d8]/40 shadow-xs transition-all duration-200"
     >
-      <div className="flex justify-between items-center w-full px-6 max-w-7xl mx-auto h-20">
+      <div className="flex justify-between items-center w-full px-4 sm:px-6 max-w-[1240px] mx-auto h-[70px]">
         {/* Brand Logo */}
         <button
           id="nav-brand"
@@ -31,45 +33,45 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateToSection, onSwi
           className="flex items-center gap-1.5 group text-left cursor-pointer"
         >
           <span className="text-2xl font-bold tracking-tight text-[#141b2b] group-hover:text-[#422cd8] transition-colors">
-            Pavan Kumar
+            {content.shortName}
           </span>
           <span className="inline-block w-2 h-2 rounded-full bg-[#5b4cf0]"></span>
         </button>
 
         {/* Desktop Navigation Links */}
         <nav aria-label="Main Navigation" className="hidden md:flex items-center gap-8">
-          <button
+          {content.sectionVisibility.work && <button
             id="nav-link-work"
             type="button"
             onClick={() => handleNavClick('work')}
             className="text-[#422cd8] font-semibold transition-colors text-[15px] hover:text-[#5b4cf0] cursor-pointer"
           >
             Work
-          </button>
-          <button
+          </button>}
+          {content.sectionVisibility.services && <button
             id="nav-link-services"
             type="button"
             onClick={() => handleNavClick('services')}
             className="text-[#474555] hover:text-[#141b2b] transition-colors text-[15px] cursor-pointer"
           >
             Services
-          </button>
-          <button
+          </button>}
+          {content.sectionVisibility.about && <button
             id="nav-link-about"
             type="button"
             onClick={() => handleNavClick('about')}
             className="text-[#474555] hover:text-[#141b2b] transition-colors text-[15px] cursor-pointer"
           >
             About
-          </button>
-          <button
+          </button>}
+          {content.sectionVisibility.contact && <button
             id="nav-link-contact"
             type="button"
             onClick={() => handleNavClick('contact')}
             className="text-[#474555] hover:text-[#141b2b] transition-colors text-[15px] cursor-pointer"
           >
             Contact
-          </button>
+          </button>}
         </nav>
 
         {/* Trailing Actions & Availability */}
@@ -84,14 +86,14 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateToSection, onSwi
           </div>
 
           {/* Primary CTA Button */}
-          <button
+          {content.sectionVisibility.contact && <button
             id="btn-header-cta"
             type="button"
             onClick={() => handleNavClick('contact')}
-            className="inline-flex items-center justify-center h-10 px-5 rounded-lg bg-[#5b4cf0] text-white text-[15px] font-semibold hover:bg-[#422cd8] transition-all duration-200 shadow-sm active:scale-[0.98] cursor-pointer"
+            className="hidden sm:inline-flex items-center justify-center h-11 px-4 rounded-lg bg-[#5b4cf0] text-white text-[15px] font-semibold hover:bg-[#422cd8] transition-all duration-200 shadow-sm active:scale-[0.98] cursor-pointer"
           >
             Start a Project
-          </button>
+          </button>}
 
           {/* Mobile Hamburger */}
           <button
@@ -121,34 +123,34 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateToSection, onSwi
             </span>
             <span>{settings.availability || 'Let’s discuss your project'}</span>
           </div>
-          <button
+          {content.sectionVisibility.work && <button
             type="button"
             onClick={() => handleNavClick('work')}
             className="block w-full text-left text-[#422cd8] font-semibold py-1.5 text-[15px]"
           >
             Work
-          </button>
-          <button
+          </button>}
+          {content.sectionVisibility.services && <button
             type="button"
             onClick={() => handleNavClick('services')}
             className="block w-full text-left text-[#474555] hover:text-[#141b2b] py-1.5 text-[15px]"
           >
             Services
-          </button>
-          <button
+          </button>}
+          {content.sectionVisibility.about && <button
             type="button"
             onClick={() => handleNavClick('about')}
             className="block w-full text-left text-[#474555] hover:text-[#141b2b] py-1.5 text-[15px]"
           >
             About
-          </button>
-          <button
+          </button>}
+          {content.sectionVisibility.contact && <button
             type="button"
             onClick={() => handleNavClick('contact')}
             className="block w-full text-left text-[#474555] hover:text-[#141b2b] py-1.5 text-[15px]"
           >
             Contact
-          </button>
+          </button>}
         </div>
       )}
     </header>

@@ -1,24 +1,72 @@
 export type ViewMode = 'public' | 'project-detail' | 'admin-login' | 'admin-dashboard';
 
+export type ProjectCategory = 'website' | 'webapp' | 'poster' | 'logo' | 'automation' | 'app';
+export type MediaOwnership = 'cloudinary-managed' | 'external' | 'local-static';
+
+export interface ProjectGalleryItem {
+  id: string;
+  url: string;
+  publicId?: string;
+  mediaId?: string;
+  alt: string;
+  order: number;
+  caption?: string;
+  ownership: MediaOwnership;
+}
+
+export type ProjectCategoryFields = Partial<Record<
+  | 'technologies'
+  | 'liveUrl'
+  | 'majorFeatures'
+  | 'responsiveSupport'
+  | 'hostingPlatform'
+  | 'userRoles'
+  | 'backendDatabase'
+  | 'authentication'
+  | 'platform'
+  | 'appStatus'
+  | 'designTools'
+  | 'brandIndustry'
+  | 'designStyle'
+  | 'colourPalette'
+  | 'brandBrief'
+  | 'posterType'
+  | 'targetAudience'
+  | 'campaignName'
+  | 'toolsPlatforms'
+  | 'integrations'
+  | 'trigger'
+  | 'automatedWorkflow'
+  | 'businessOutcome'
+  | 'demoUrl',
+  string | string[]
+>>;
+
 export interface Project {
   id: string;
   slug: string;
   order: number;
   title: string;
-  category: 'website' | 'webapp' | 'poster' | 'logo' | 'automation' | 'app';
+  category: ProjectCategory;
   categoryLabel: string;
   tag: string; // e.g. "WEBSITE • CLIENT PROJECT"
   summary: string;
   fullDescription?: string;
-  technologies: string[];
+  categoryFields: ProjectCategoryFields;
+  gallery: ProjectGalleryItem[];
+  coverImageId: string;
+  schemaVersion: 2;
+  mediaIds: string[];
+  /** Legacy read compatibility. New writes use gallery/categoryFields. */
+  technologies?: string[];
   liveUrl?: string;
   role: string;
   client?: string;
   timeline?: string;
   deliverables?: string;
   status: 'published' | 'draft';
-  image: string;
-  thumbnail: string;
+  image?: string;
+  thumbnail?: string;
   bannerImage?: string;
   lastUpdated: string;
   challenge?: string;
@@ -51,8 +99,8 @@ export interface ServiceItem {
 export interface SkillItem { id: string; name: string; group: string; iconName?: string; order: number; published: boolean }
 export interface ProcessItem { id: string; title: string; description: string; order: number; published: boolean }
 export interface CategoryItem { id: string; name: string; slug: string; description?: string; iconName?: string; order: number; published: boolean; mediaLayout: 'cover' | 'gallery' | 'logo'; accent: 'indigo' | 'emerald' | 'amber' | 'rose' }
-export type MediaOwnership = 'cloudinary-managed' | 'external' | 'local-static';
 export interface MediaAsset { id: string; assetId?: string; publicId?: string; resourceType: 'image' | 'raw' | 'video'; deliveryType: string; format: string; version?: number; secureUrl: string; bytes?: number; width?: number; height?: number; originalFilename?: string; folder?: string; ownership: MediaOwnership; status: 'active' | 'deleting' | 'failed'; createdAt?: string; createdBy?: string }
+export interface CleanupJob { id: string; kind: 'media-delete'; mediaId: string; publicId?: string; resourceType?: string; status: 'failed' | 'pending'; attempts: number; updatedAt?: unknown }
 export interface SiteContent {
   schemaVersion: number;
   name: string; shortName: string; initials: string; professionalTitle: string; roleHeadline: string;

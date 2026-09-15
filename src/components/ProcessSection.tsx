@@ -4,8 +4,8 @@ import { useContent } from '../lib/content';
 export const ProcessSection: React.FC = () => {
   const { process } = useContent();
   return (
-    <section id="process" className="py-20 bg-[#f1f3ff] border-y border-[#c8c4d8]/40">
-      <div className="max-w-7xl mx-auto px-6">
+    <section id="process" className="py-10 sm:py-14 lg:py-18 bg-[#f1f3ff] border-y border-[#c8c4d8]/40">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-6">
         {/* Section Header */}
         <div className="text-center max-w-xl mx-auto mb-14">
           <span className="px-3 py-1 rounded-md bg-[#dce2f7] text-[#422cd8] text-xs font-semibold uppercase tracking-wider">

@@ -23,7 +23,7 @@ const result = spawnSync(
     'demo-portfolio',
     '--only',
     browser ? 'auth,firestore' : 'firestore',
-    browser ? 'npx playwright test' : 'npm run test:rules:run',
+    browser ? 'node node_modules/@playwright/test/cli.js test' : 'npm run test:rules:run',
   ],
   { stdio: 'inherit', env, windowsHide: true },
 );

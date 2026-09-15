@@ -77,9 +77,9 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
   };
 
   return (
-    <section id="contact" className="py-24 bg-[#111827] text-white">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+    <section id="contact" className="py-10 sm:py-14 lg:py-18 bg-[#111827] text-white">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Info & Verified Contact Details */}
           <div className="lg:col-span-5 space-y-8">
             <div>
@@ -105,7 +105,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
                 <div className="w-10 h-10 rounded-lg bg-[#5b4cf0] text-white flex items-center justify-center shrink-0">
                   <Mail className="w-5 h-5" />
                 </div>
-                <div className="overflow-hidden">
+                <div className="min-w-0 overflow-hidden">
                   <span className="text-xs text-gray-400 block font-medium">Primary Email</span>
                   <span className="text-sm font-medium text-white truncate block group-hover:text-[#c4c0ff] transition-colors">
                     {content.email}
@@ -123,9 +123,9 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
                 <div className="w-10 h-10 rounded-lg bg-white/10 text-white flex items-center justify-center shrink-0">
                   <Code className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="min-w-0 overflow-hidden">
                   <span className="text-xs text-gray-400 block font-medium">GitHub Repository</span>
-                  <span className="text-sm font-medium text-white group-hover:text-[#c4c0ff] transition-colors">
+                  <span className="text-sm font-medium text-white truncate block group-hover:text-[#c4c0ff] transition-colors">
                     {content.github.replace(/^https?:\/\//, '')}
                   </span>
                 </div>
@@ -141,9 +141,9 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
                 <div className="w-10 h-10 rounded-lg bg-blue-600/30 text-blue-300 flex items-center justify-center shrink-0">
                   <Linkedin className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="min-w-0 overflow-hidden">
                   <span className="text-xs text-gray-400 block font-medium">LinkedIn Profile</span>
-                  <span className="text-sm font-medium text-white group-hover:text-[#c4c0ff] transition-colors">
+                  <span className="text-sm font-medium text-white truncate block group-hover:text-[#c4c0ff] transition-colors">
                     {content.linkedin.replace(/^https?:\/\//, '')}
                   </span>
                 </div>
@@ -158,7 +158,7 @@ export const ContactSection: React.FC<ContactSectionProps> = ({ selectedServiceP
           </div>
 
           {/* Right Interactive Project Enquiry Form */}
-          <div className="lg:col-span-7 bg-white p-8 rounded-2xl text-[#141b2b] shadow-2xl">
+          <div className="lg:col-span-7 bg-white p-5 sm:p-6 rounded-2xl text-[#141b2b] shadow-2xl">
             <h3 className="text-2xl font-bold text-[#141b2b] mb-1">Send a Direct Enquiry</h3>
             <p className="text-xs sm:text-sm text-[#474555] mb-6">
               Tell me what you have in mind so we can discuss your project.

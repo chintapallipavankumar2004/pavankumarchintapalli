@@ -1,12 +1,21 @@
 import React from 'react';
 import { ArrowLeft, CheckCircle2, ArrowRight, ExternalLink } from 'lucide-react';
 import type { Project } from '../types';
+import { ProjectGallery } from './ProjectGallery';
+import { PROJECT_CATEGORIES, projectCta, projectTechnologies } from '../lib/projects';
 interface Props {
   project: Project;
   onBackToPortfolio: () => void;
   onRequestSimilar: () => void;
 }
 export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar }: Props) {
+  const cta = projectCta(project);
+  const technologies = projectTechnologies(project);
+  const details = PROJECT_CATEGORIES[project.category].fields.flatMap((field) => {
+    if (['technologies','liveUrl','demoUrl'].includes(field.key)) return [];
+    const value = project.categoryFields[field.key];
+    return value && (!Array.isArray(value) || value.length) ? [{ label: field.label, value }] : [];
+  });
   const metadata = [
     ['Client', project.client],
     ['Role', project.role],
@@ -14,9 +23,9 @@ export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar
     ['Deliverables', project.deliverables],
   ].filter(([, value]) => value);
   return (
-    <section id="view-project-detail" className="min-h-screen pb-24">
+    <section id="view-project-detail" className="min-h-screen pb-14">
       <div className="bg-white border-b border-[#c8c4d8]/40 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-3">
+        <div className="max-w-[1240px] mx-auto px-4 sm:px-6 min-h-16 py-2 flex items-center justify-between gap-3">
           <button
             onClick={onBackToPortfolio}
             className="inline-flex items-center gap-2 text-sm sm:text-base text-[#422cd8] font-semibold"
@@ -37,7 +46,7 @@ export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar
           </div>
         </div>
       </div>
-      <div className="max-w-7xl mx-auto px-6 pt-10">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-6 pt-8">
         <div className="max-w-3xl space-y-4 mb-8">
           <span className="px-3 py-1 rounded-full bg-[#e9edff] text-[#422cd8] text-xs font-semibold uppercase tracking-wide">
             {project.categoryLabel}
@@ -49,14 +58,8 @@ export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar
             {project.fullDescription || project.summary}
           </p>
         </div>
-        <div className="rounded-2xl border border-[#c8c4d8] bg-white overflow-hidden shadow-sm mb-12">
-          <div className="relative aspect-[21/9] w-full bg-[#111827]">
-            <img
-              alt={`${project.title} project showcase`}
-              src={project.bannerImage || project.image}
-              className="w-full h-full object-cover"
-            />
-          </div>
+        <div className="mb-10">
+          <ProjectGallery project={project} />
         </div>
         {metadata.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 p-6 rounded-2xl bg-white border border-[#c8c4d8] mb-12 shadow-xs">
@@ -73,7 +76,7 @@ export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-8 space-y-8">
             {project.challenge && (
-              <div className="bg-white p-8 rounded-2xl border border-[#c8c4d8] space-y-4 shadow-xs">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#c8c4d8] space-y-4 shadow-xs">
                 <h2 className="text-xl md:text-2xl font-bold">The Challenge</h2>
                 <p className="text-sm md:text-base text-[#474555] leading-relaxed whitespace-pre-line">
                   {project.challenge}
@@ -81,7 +84,7 @@ export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar
               </div>
             )}
             {!!project.solution?.length && (
-              <div className="bg-white p-8 rounded-2xl border border-[#c8c4d8] space-y-4 shadow-xs">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#c8c4d8] space-y-4 shadow-xs">
                 <h2 className="text-xl md:text-2xl font-bold">The Solution</h2>
                 <ul className="space-y-3">
                   {project.solution.map((text, i) => (
@@ -93,16 +96,24 @@ export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar
                 </ul>
               </div>
             )}
-            {!!project.technologies.length && (
-              <div className="bg-white p-8 rounded-2xl border border-[#c8c4d8] space-y-4">
+            {!!technologies.length && (
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#c8c4d8] space-y-4">
                 <h2 className="text-xl font-bold">Technologies</h2>
                 <div className="flex flex-wrap gap-2">
-                  {project.technologies.map((t) => (
+                  {technologies.map((t) => (
                     <span key={t} className="px-3 py-1 rounded-md bg-[#f1f3ff] text-sm">
                       {t}
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+            {!!details.length && (
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#c8c4d8] space-y-4">
+                <h2 className="text-xl font-bold">Project details</h2>
+                <dl className="grid sm:grid-cols-2 gap-4">
+                  {details.map((item) => <div key={item.label}><dt className="text-xs uppercase tracking-wide text-[#474555] font-semibold">{item.label}</dt><dd className="mt-1 text-sm whitespace-pre-line">{Array.isArray(item.value) ? item.value.join(', ') : item.value}</dd></div>)}
+                </dl>
               </div>
             )}
           </div>
@@ -119,14 +130,14 @@ export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar
                 Discuss Your Project
                 <ArrowRight className="w-4 h-4" />
               </button>
-              {project.liveUrl && (
+              {cta && (
                 <a
-                  href={project.liveUrl}
+                  href={cta.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-sm text-[#422cd8]"
                 >
-                  View Live Project
+                  {cta.label}
                   <ExternalLink className="w-4 h-4" />
                 </a>
               )}

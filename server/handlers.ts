@@ -86,12 +86,12 @@ export function createMediaDeleteHandler(services = adminServices) {
       const { uid, db } = await requireAdmin(req, services());
       const b = bodyObject(req);
       if (Object.keys(b).some(k => !['mediaId'].includes(k)) || typeof b.mediaId !== 'string') throw new HttpError(400, 'Invalid media request.');
-      const ref = db.doc(`media/${b.mediaId}`); const snap = await ref.get();
-      if (!snap.exists) return json(res, 200, { deleted: true, alreadyDeleted: true });
+      const ref = db.doc(`media/${b.mediaId}`); const jobRef = db.collection('cleanupJobs').doc(`media-${b.mediaId}`); const snap = await ref.get();
+      if (!snap.exists) { await jobRef.delete().catch(()=>{}); return json(res, 200, { deleted: true, alreadyDeleted: true }); }
       const media = snap.data()!;
       const uses = await Promise.all([db.collection('projects').where('mediaIds','array-contains',b.mediaId).limit(1).get(), db.collection('siteContent').where('mediaIds','array-contains',b.mediaId).limit(1).get()]);
       if (uses.some(q=>!q.empty)) throw new HttpError(409, 'This media is still in use.');
-      if (media.ownership !== 'cloudinary-managed') { await ref.delete(); return json(res, 200, { deleted: true, referenceOnly: true }); }
+      if (media.ownership !== 'cloudinary-managed') { await db.runTransaction(async tx=>{tx.delete(ref);tx.delete(jobRef);tx.set(db.collection('auditLogs').doc(),{action:'media.reference-delete',entityType:'media',entityId:b.mediaId,adminUid:uid,summary:'Removed external media reference',result:'success',createdAt:FieldValue.serverTimestamp()})}); return json(res, 200, { deleted: true, referenceOnly: true }); }
       const secret=process.env.CLOUDINARY_API_SECRET, key=process.env.CLOUDINARY_API_KEY, cloud=process.env.CLOUDINARY_CLOUD_NAME;
       if (!secret||!key||!cloud) throw new HttpError(503,'Media deletion is not configured.');
       const timestamp=Math.floor(Date.now()/1000); const params={ invalidate:'true', public_id:media.publicId, timestamp };
@@ -99,7 +99,7 @@ export function createMediaDeleteHandler(services = adminServices) {
       const response=await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud)}/${encodeURIComponent(media.resourceType||'image')}/destroy`,{method:'POST',body:form});
       const result=await response.json() as {result?:string};
       if (!response.ok || !['ok','not found'].includes(result.result||'')) { const job=db.collection('cleanupJobs').doc(`media-${b.mediaId}`); await job.set({ kind:'media-delete', mediaId:b.mediaId, publicId:media.publicId, resourceType:media.resourceType, status:'failed', attempts:FieldValue.increment(1), updatedAt:FieldValue.serverTimestamp(), createdBy:uid },{merge:true}); throw new HttpError(502,'Cloudinary deletion failed. A cleanup retry was created.'); }
-      await db.runTransaction(async tx=>{tx.delete(ref);tx.set(db.collection('auditLogs').doc(),{action:'media.delete',entityType:'media',entityId:b.mediaId,adminUid:uid,summary:'Deleted managed media',result:'success',createdAt:FieldValue.serverTimestamp()});});
+      await db.runTransaction(async tx=>{tx.delete(ref);tx.delete(jobRef);tx.set(db.collection('auditLogs').doc(),{action:'media.delete',entityType:'media',entityId:b.mediaId,adminUid:uid,summary:'Deleted managed media',result:'success',createdAt:FieldValue.serverTimestamp()});});
       json(res,200,{deleted:true});
     } catch(error){respondError(res,error);}
   };

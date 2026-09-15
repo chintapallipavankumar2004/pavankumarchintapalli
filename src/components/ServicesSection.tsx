@@ -23,8 +23,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
   };
 
   return (
-    <section id="services" className="py-20 bg-white border-t border-[#c8c4d8]/30">
-      <div className="max-w-7xl mx-auto px-6">
+    <section id="services" className="py-10 sm:py-14 lg:py-18 bg-white border-t border-[#c8c4d8]/30">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-6">
         {/* Section Heading */}
         <div className="text-center max-w-2xl mx-auto mb-16">
           <span className="px-3 py-1 rounded-md bg-[#e9edff] text-[#422cd8] text-xs font-semibold uppercase tracking-wider">

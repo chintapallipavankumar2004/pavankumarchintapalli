@@ -51,6 +51,12 @@ const project = (slug: string, status = 'draft') => ({
   createdAt: serverTimestamp(),
   updatedAt: serverTimestamp(),
 });
+const projectV2 = (slug: string, category = 'website') => ({
+  slug, title:'Gallery Project', category, categoryLabel:'Websites', tag:'Websites', summary:'A gallery project.', role:'', status:'draft', order:0,
+  schemaVersion:2, categoryFields: category === 'logo' ? { designStyle:'Minimal' } : { technologies:['React'], liveUrl:'https://example.com' },
+  gallery:[{id:'cover',url:'https://example.com/cover.png',alt:'Project dashboard',order:0,ownership:'external'}], coverImageId:'cover', mediaIds:[],
+  createdAt:serverTimestamp(), updatedAt:serverTimestamp(),
+});
 beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (context) => {
@@ -64,6 +70,7 @@ beforeEach(async () => {
       status: 'new',
       createdAt: Timestamp.now(),
     });
+    await setDoc(doc(db, 'services/website'), { published: true });
     await setDoc(doc(db, 'settings/public'), {
       headshot: 'https://example.com/photo.png',
       resumeUrl: '',
@@ -130,6 +137,26 @@ test('admin can create, publish, unpublish, duplicate, reorder and delete', asyn
   batch.update(doc(db, 'projects/copy'), { order: 0, updatedAt: serverTimestamp() });
   await assertSucceeds(batch.commit());
   await assertSucceeds(deleteDoc(doc(db, 'projects/new')));
+});
+test('gallery v2 rules enforce limits, cover references, categories and legacy banner preservation', async () => {
+  const db=env.authenticatedContext('owner').firestore();
+  await assertSucceeds(setDoc(doc(db,'projects/gallery'),projectV2('gallery')));
+  const six=Array.from({length:6},(_,index)=>({id:`image-${index}`,url:`https://example.com/${index}.png`,alt:`Image ${index}`,order:index,ownership:'external'}));
+  await assertFails(setDoc(doc(db,'projects/too-many'),{...projectV2('too-many'),gallery:six,coverImageId:'image-0'}));
+  await assertFails(setDoc(doc(db,'projects/bad-cover'),{...projectV2('bad-cover'),coverImageId:'missing'}));
+  await assertFails(setDoc(doc(db,'projects/logo-link'),{...projectV2('logo-link','logo'),categoryFields:{designStyle:'Minimal',liveUrl:'https://example.com'}}));
+  await assertFails(setDoc(doc(db,'projects/new-banner'),{...projectV2('new-banner'),bannerImage:'https://example.com/banner.png'}));
+  await env.withSecurityRulesDisabled((context)=>setDoc(doc(context.firestore(),'projects/legacy-banner'),{...project('legacy-banner'),bannerImage:'https://example.com/banner.png'}));
+  await assertSucceeds(updateDoc(doc(db,'projects/legacy-banner'),{status:'published',updatedAt:serverTimestamp()}));
+});
+test('only admin can permanently delete an enquiry and create a content-free audit record', async () => {
+  const outsider=env.authenticatedContext('other').firestore();
+  await assertFails(deleteDoc(doc(outsider,'enquiries/test')));
+  const db=env.authenticatedContext('owner').firestore(); const batch=writeBatch(db);
+  batch.delete(doc(db,'enquiries/test'));
+  batch.set(doc(db,'auditLogs/enquiry-delete'),{action:'enquiry.delete',entityType:'enquiry',entityId:'test',adminUid:'owner',summary:'Permanently deleted enquiry record',result:'success',createdAt:serverTimestamp()});
+  await assertSucceeds(batch.commit());
+  assert.equal((await getDoc(doc(db,'enquiries/test'))).exists(),false);
 });
 test('admin cannot change authorization or save invalid projects and URLs', async () => {
   const db = env.authenticatedContext('owner').firestore();

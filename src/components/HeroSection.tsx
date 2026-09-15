@@ -12,8 +12,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
   const settings = useSettings();
   const { content } = useContent();
   return (
-    <section id="hero" className="relative pt-12 pb-20 md:pt-20 md:pb-28 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+    <section id="hero" className="relative py-10 sm:py-12 lg:py-16 overflow-hidden">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center">
         {/* Left Column (55% desktop: 7 cols) */}
         <div className="lg:col-span-7 flex flex-col items-start space-y-6">
           {/* Availability Beacon Pill */}
@@ -39,39 +39,41 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
             <p className="text-[#422cd8] text-sm md:text-base uppercase tracking-wider font-bold">
               {content.name}
             </p>
-            <h1 className="text-4xl md:text-5xl lg:text-[56px] font-bold text-[#141b2b] tracking-tight leading-[1.12]">
+            <h1 className="text-[clamp(2.25rem,4.2vw,3.25rem)] font-bold text-[#141b2b] tracking-tight leading-[1.12]">
               {content.professionalTitle}
             </h1>
           </div>
 
           {/* Value Proposition Subtitle */}
-          <p className="text-lg md:text-xl text-[#474555] max-w-xl leading-relaxed font-normal">
+          <p className="text-base md:text-lg text-[#474555] max-w-xl leading-relaxed font-normal">
             {content.heroDescription}
           </p>
 
           {/* Dual Action CTAs */}
-          <div className="pt-2 flex flex-wrap items-center gap-4 w-full sm:w-auto">
+          {(content.sectionVisibility.work || content.sectionVisibility.contact) && <div className="pt-2 flex flex-wrap items-center gap-4 w-full sm:w-auto">
+            {content.sectionVisibility.work &&
             <button
               id="btn-hero-view-work"
               type="button"
               onClick={onViewWork}
-              className="inline-flex items-center justify-center h-12 px-7 rounded-lg bg-[#5b4cf0] text-white text-[15px] font-semibold hover:bg-[#422cd8] transition-all duration-200 shadow-sm hover:shadow active:scale-[0.98] gap-2 cursor-pointer"
+            className="inline-flex items-center justify-center min-h-11 px-6 rounded-lg bg-[#5b4cf0] text-white text-[15px] font-semibold hover:bg-[#422cd8] transition-all duration-200 shadow-sm hover:shadow active:scale-[0.98] gap-2 cursor-pointer"
             >
               <span>{content.primaryCtaLabel}</span>
               <ArrowDown className="w-4 h-4" />
-            </button>
+            </button>}
+            {content.sectionVisibility.contact &&
             <button
               id="btn-hero-start-project"
               type="button"
               onClick={onStartProject}
-              className="inline-flex items-center justify-center h-12 px-6 rounded-lg bg-white border border-[#c8c4d8] hover:border-[#777587] text-[#141b2b] text-[15px] font-semibold hover:bg-[#f1f3ff] transition-all duration-200 shadow-xs active:scale-[0.98] cursor-pointer"
+              className="inline-flex items-center justify-center min-h-11 px-5 rounded-lg bg-white border border-[#c8c4d8] hover:border-[#777587] text-[#141b2b] text-[15px] font-semibold hover:bg-[#f1f3ff] transition-all duration-200 shadow-xs active:scale-[0.98] cursor-pointer"
             >
               {content.secondaryCtaLabel}
-            </button>
-          </div>
+            </button>}
+          </div>}
 
           {/* Quick Meta Stats / Confidence Indicators */}
-          <div className="pt-6 grid grid-cols-3 gap-6 border-t border-[#c8c4d8]/30 w-full max-w-lg">
+          <div className="pt-4 grid grid-cols-3 gap-3 sm:gap-5 border-t border-[#c8c4d8]/30 w-full max-w-lg">
             <div>
               <span className="block text-xl md:text-2xl font-bold text-[#141b2b]">Direct</span>
               <span className="text-xs sm:text-sm text-[#474555]">Clear Communication</span>
@@ -89,7 +91,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onViewWork, onStartPro
 
         {/* Right Column (45% desktop: 5 cols) - Portrait Frame */}
         <div className="lg:col-span-5 flex justify-center lg:justify-end">
-          <div className="relative w-full max-w-md">
+          <div className="relative w-full max-w-sm">
             {/* Accent ambient backdrop */}
             <div className="absolute -inset-2 bg-gradient-to-tr from-[#5b4cf0]/20 to-[#e1e8fd] rounded-2xl filter blur-xl opacity-75"></div>
 

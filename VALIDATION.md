@@ -22,6 +22,16 @@
 
 Follow [SETUP.md](SETUP.md) for the complete environment, Firebase, App Check, Cloudinary and Vercel steps and live verification checklist. Local validation is not a claim that the site is deployed or configured in production.
 
+## Gallery and CMS enhancement — 2026-09-15
+
+- `npm run lint` passes strict TypeScript validation.
+- `npm test` passes 17 unit/API tests, including legacy gallery conversion, gallery limits/order/cover selection, category allowlists and CTAs, browser-frame/banner removal, replacement cleanup selection, shared-media protection and cleanup-job creation.
+- `npm run test:rules` passes 9 Firestore emulator groups, including v2 gallery validation, legacy single-image/banner compatibility, category field restrictions, default-deny behavior and admin-only audited enquiry deletion.
+- `npm run test:browser` passes 4 headless Chrome flows against Firebase Auth/Firestore emulators. Coverage includes the public breakpoints at 320, 375, 768, 1024, 1366 and 1920 px, mobile admin navigation at 320 px, gallery keyboard navigation, reduced-motion autoplay, logo CTA hiding, admin project CRUD/reorder/publication, permanent enquiry deletion, zero-badge hiding and Settings persistence.
+- `npm run build`, the client-bundle secret-name/PEM scan, conflict-marker scan and `git diff --check` pass. `npm audit --omit=dev --audit-level=low` reports zero production vulnerabilities.
+- The production build still reports a roughly 1.01 MB (265.82 kB gzip) main JavaScript chunk and notes that one dynamic Firestore import is also statically imported. This is non-blocking but remains an optimization target.
+- No production migration, Cloudinary upload/deletion, Firebase/App Check attestation, Firestore rule deployment or Vercel deployment was performed. Mana Vastram and Coffee Hub compatibility is covered by the generic legacy adapter and migration logic, but their actual remote documents and live routes still require the manual checks in `SETUP.md`.
+
 ## CMS expansion — 2026-09-12
 
 - Added typed Firestore content for site text/SEO, categories, services, skills and process steps; a private media registry, audit records, revisions and cleanup jobs; and an idempotent `npm run cms:seed` migration.

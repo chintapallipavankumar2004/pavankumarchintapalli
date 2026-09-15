@@ -34,10 +34,15 @@ test.beforeAll(async () => {
       categoryLabel: 'Websites',
       tag: 'Websites',
       summary: 'A test project summary.',
-      technologies: ['React'],
+      categoryFields: { technologies: ['React'], liveUrl: 'https://example.com' },
       role: '',
-      image: 'https://example.com/project.png',
-      thumbnail: '',
+      schemaVersion: 2,
+      gallery: [
+        { id:'cover', url:'https://example.com/project.png', alt:'Published project home screen', order:0, ownership:'external' },
+        { id:'detail', url:'https://example.com/project-detail.png', alt:'Published project detail screen', order:1, ownership:'external' },
+      ],
+      coverImageId: 'cover',
+      mediaIds: [],
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     };
@@ -55,11 +60,19 @@ test.beforeAll(async () => {
       status: 'draft',
       order: 1,
     });
+    await setDoc(doc(db, 'projects/logo-project'), {
+      ...base, title:'Logo Test Project', slug:'logo-project', category:'logo', categoryLabel:'Logos', tag:'Logos',
+      categoryFields:{designStyle:'Minimal'}, gallery:[{id:'logo',url:'https://example.com/logo.png',alt:'Test logo mark',order:0,ownership:'external'}], coverImageId:'logo', status:'published', order:2,
+    });
+    await setDoc(doc(db, 'enquiries/test-enquiry'), { fullName:'Test Sender', email:'sender@example.com', phone:'', service:'website', budget:'Not specified', description:'This is an enquiry that can be safely deleted during the browser test.', status:'new', createdAt:Timestamp.now() });
     await setDoc(doc(db, 'services/webapp'), { id:'webapp', title:'Web Applications', description:'Test service', iconName:'terminal', features:['Dashboards'], order:0, published:true, schemaVersion:1, updatedAt:Timestamp.now(), updatedBy:account.localId });
   });
 });
 test.afterAll(async () => {
   await env?.cleanup();
+});
+test.afterEach(async ({ page }) => {
+  await page.close({ runBeforeUnload: false });
 });
 test.beforeEach(async ({ context }) => {
   // These are local integration tests; do not depend on external image/font CDNs.
@@ -73,7 +86,7 @@ test('public routes exclude drafts, survive refresh and browser history, and pre
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Published Test Project' })).toBeVisible();
   await expect(page.getByText('Private Draft Project')).toHaveCount(0);
-  await page.getByRole('link', { name: 'View Project Details' }).click();
+  await page.locator('#project-card-published-project').getByRole('link', { name: 'View Project Details' }).click();
   await expect(page).toHaveURL(/\/projects\/published-project$/);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Published Test Project' })).toBeVisible();
@@ -82,17 +95,30 @@ test('public routes exclude drafts, survive refresh and browser history, and pre
   await page.goto('/projects/private-draft');
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();
   await page.goto('/');
-  for (const width of [390, 768, 1440]) {
+  for (const width of [320, 375, 768, 1024, 1366, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.locator('#hero-profile-avatar')).toHaveAttribute(
       'src',
       /portfolio_hybq1j\.png/,
     );
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
-    ).toBe(true);
+    const overflow = await page.evaluate(() => ({
+      viewport: window.innerWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      elements: [...document.querySelectorAll<HTMLElement>('body *')]
+        .filter((element) => { const rect=element.getBoundingClientRect(); return rect.right > window.innerWidth + 1 || rect.left < -1; })
+        .slice(0,8)
+        .map((element) => ({ tag:element.tagName, id:element.id, className:element.className, left:element.getBoundingClientRect().left, right:element.getBoundingClientRect().right })),
+    }));
+    expect(overflow.scrollWidth, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
   }
   await page.screenshot({ path: 'test-results/public-desktop.png', fullPage: true });
+  const gallery=page.getByRole('region',{name:'Published Test Project image gallery'});
+  await gallery.focus();
+  await gallery.press('ArrowRight');
+  await expect(gallery.getByAltText('Published project detail screen')).toBeVisible();
+  await expect(page.getByText('example.com',{exact:false})).toHaveCount(0);
+  const logoCard=page.locator('#project-card-logo-project');
+  await expect(logoCard.getByRole('link',{name:/Visit Website|Open Application|View App|View Demo/})).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 test('service selection works; missing App Check never produces a false success; resume is unavailable without a PDF', async ({
@@ -109,6 +135,15 @@ test('service selection works; missing App Check never produces a false success;
   await expect(page.locator('#enquiry-success')).toHaveCount(0);
   await expect(page.locator('#btn-download-resume')).toHaveAttribute('aria-disabled', 'true');
 });
+test('gallery autoplay stays disabled when reduced motion is requested', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const gallery=page.getByRole('region',{name:'Published Test Project image gallery'});
+  const current=gallery.locator('[aria-current="true"]');
+  await expect(current).toHaveAttribute('aria-label','Show image 1 of 2');
+  await page.waitForTimeout(5200);
+  await expect(current).toHaveAttribute('aria-label','Show image 1 of 2');
+});
 test('authorized admin can edit, publish, reorder and delete; another browser sees only published changes', async ({
   page,
   browser,
@@ -118,46 +153,70 @@ test('authorized admin can edit, publish, reorder and delete; another browser se
   await page.locator('#admin-pwd').fill('test-password-123');
   await page.locator('#btn-admin-submit').click();
   await expect(page.locator('#view-admin-dashboard')).toBeVisible();
+  await page.setViewportSize({width:320,height:800});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await page.getByRole('button',{name:'Open admin navigation'}).click();
+  await page.getByRole('button',{name:/^Enquiries/}).click();
+  await page.getByRole('button',{name:'Delete enquiry from Test Sender'}).click();
+  await expect(page.getByRole('alertdialog')).toContainText('cannot be undone');
+  await page.getByRole('button',{name:'Delete permanently'}).click();
+  await expect(page.getByText('Enquiry permanently deleted.')).toBeVisible();
+  await expect(page.getByLabel(/new enquiries/)).toHaveCount(0);
+  await page.setViewportSize({width:1366,height:900});
+  await page.getByRole('button',{name:'Projects',exact:true}).click();
   const draft = page.getByRole('row').filter({ hasText: 'Private Draft Project' });
   await draft.getByRole('button', { name: 'Publish', exact: true }).click();
   await expect(draft.getByRole('button', { name: 'Unpublish' })).toBeVisible();
   const visitor = await browser.newContext();
+  try {
   const publicPage = await visitor.newPage();
   await visitor.route(/^https:\/\//, (route) => route.abort());
   await publicPage.goto('http://127.0.0.1:3100/projects/private-draft');
   await expect(publicPage.getByRole('heading', { name: 'Private Draft Project' })).toBeVisible();
   await draft.getByRole('button', { name: 'Unpublish' }).click();
   await expect(publicPage.getByRole('heading', { name: 'Page not found' })).toBeVisible();
-  await page.locator('#btn-sidebar-add-project').click();
+  await page.getByRole('button',{name:'Add Project',exact:true}).click();
+  await page.getByLabel('Technologies').fill('React');
+  const categoryWarning=page.waitForEvent('dialog');
+  const categoryChange=page.getByLabel('Category').selectOption('logo');
+  const warning=await categoryWarning;
+  expect(warning.message()).toContain('clears fields that do not apply');
+  await warning.accept();
+  await categoryChange;
+  await expect(page.getByLabel('Design tools')).toBeVisible();
+  await expect(page.getByLabel('Live website URL')).toHaveCount(0);
+  await page.getByLabel('Category').selectOption('website');
   await page.getByLabel('Project title', { exact: true }).fill('New Portfolio Project');
   await page.getByLabel('Short summary', { exact: true }).fill('A newly created portfolio entry.');
-  await page.getByLabel('Project image', { exact: true }).fill('https://example.com/new.png');
-  await page.getByRole('button', { name: 'Save Project Record' }).click();
+  await page.getByLabel('Image 1 URL or upload', { exact: true }).fill('https://example.com/new.png');
+  await page.getByLabel('Alt text', { exact: true }).fill('New portfolio project screen');
+  await page.getByRole('button', { name: 'Save Project' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const row = page.getByRole('row').filter({ hasText: 'New Portfolio Project' });
   await expect(row).toBeVisible();
   await row.getByRole('button', { name: 'Move New Portfolio Project up' }).click();
-  await expect(page.locator('tbody tr').nth(1)).toContainText('New Portfolio Project');
+  await expect(page.locator('tbody tr').nth(2)).toContainText('New Portfolio Project');
   await row.getByRole('button', { name: 'Edit Project', exact: true }).click();
   await page
     .getByLabel('Short summary', { exact: true })
     .fill('Updated project details are saved.');
-  await page.getByRole('button', { name: 'Save Project Record' }).click();
+  await page.getByRole('button', { name: 'Save Project' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await row.getByRole('button', { name: 'Duplicate Entry' }).click();
+  await row.getByRole('button', { name: 'Duplicate Project' }).click();
   await expect(
     page.getByRole('row').filter({ hasText: 'Copy of New Portfolio Project' }),
   ).toBeVisible();
   await page
     .getByRole('row')
     .filter({ hasText: 'Copy of New Portfolio Project' })
-    .getByRole('button', { name: 'Delete Entry' })
+    .getByRole('button', { name: 'Delete Project' })
     .click();
   await page.locator('#btn-confirm-delete-project').click();
   await expect(
     page.getByRole('row').filter({ hasText: 'Copy of New Portfolio Project' }),
   ).toHaveCount(0);
-  await page.getByRole('button', { name: 'Portal Settings' }).click();
+  await page.getByRole('button', { name: 'Manage Website', exact: true }).click();
+  await page.getByRole('tab', { name: 'Display settings' }).click();
   await page.getByLabel('Availability text (optional)').fill('Discuss your next project');
   await page.getByLabel('Resume PDF', { exact: true }).fill('https://example.com/resume.pdf');
   await page.getByRole('button', { name: 'Save Settings' }).click();
@@ -172,5 +231,7 @@ test('authorized admin can edit, publish, reorder and delete; another browser se
   );
   await page.getByRole('button', { name: 'Sign Out' }).click();
   await expect(page.locator('#admin-email')).toBeVisible();
-  await visitor.close();
+  } finally {
+    await visitor.close();
+  }
 });

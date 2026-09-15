@@ -13,15 +13,16 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { httpsUrl, pdfUrl, slugPattern } from './validation';
-import type { Project, Enquiry, PortfolioSettings, SiteContent, ServiceItem, SkillItem, ProcessItem, CategoryItem, MediaAsset } from '../types';
+import type { Project, Enquiry, PortfolioSettings, SiteContent, ServiceItem, SkillItem, ProcessItem, CategoryItem, MediaAsset, CleanupJob } from '../types';
 import { defaultContent } from '../data/defaultContent';
+import { normalizeProject, projectWriteFields } from './projects';
 
 const database = () => {
   if (!db) throw new Error('Firebase is not configured.');
   return db;
 };
 const date = (value: any) => value?.toDate?.().toLocaleString() || '';
-export const projectFromDoc = (entry: any): Project => ({
+export const projectFromDoc = (entry: any): Project => normalizeProject({
   ...entry.data(),
   id: entry.id,
   lastUpdated: date(entry.data().updatedAt),
@@ -85,28 +86,36 @@ export function watchSettings(
 export async function saveProject(project: Project, creating: boolean) {
   if (!slugPattern.test(project.slug) || project.slug.length > 80 || project.id !== project.slug)
     throw new Error('Use a valid project slug.');
-  if (
-    !project.title.trim() ||
-    !project.summary.trim() ||
-    !httpsUrl(project.image) ||
-    !httpsUrl(project.liveUrl || '', true)
-  )
-    throw new Error('Add a title, summary, HTTPS image and valid optional live URL.');
-  const { id, lastUpdated, ...fields } = project;
-  const clean = Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value !== undefined),
-  );
-  const ref = doc(database(), 'projects', id);
+  const fields = projectWriteFields(project);
+  const ref = doc(database(), 'projects', project.id);
   await runTransaction(database(), async (tx) => {
     const existing = await tx.get(ref);
     if (creating && existing.exists())
       throw new Error('This slug is already used. Choose another.');
     if (!creating && !existing.exists())
       throw new Error('This project was deleted. Refresh the catalog.');
+    if (existing.exists()) {
+      tx.set(doc(collection(database(), 'contentRevisions')), {
+        entityType: 'project',
+        entityId: project.id,
+        snapshot: existing.data(),
+        createdAt: serverTimestamp(),
+        createdBy: auth?.currentUser?.uid || '',
+      });
+    }
     tx.set(ref, {
-      ...clean,
+      ...fields,
       createdAt: existing.data()?.createdAt || serverTimestamp(),
       updatedAt: serverTimestamp(),
+    }, { merge: true });
+    tx.set(doc(collection(database(), 'auditLogs')), {
+      action: creating ? 'project.create' : 'project.update',
+      entityType: 'project',
+      entityId: project.id,
+      adminUid: auth?.currentUser?.uid || '',
+      summary: creating ? 'Created project record' : 'Updated project record',
+      result: 'success',
+      createdAt: serverTimestamp(),
     });
   });
 }
@@ -117,7 +126,13 @@ export async function setProjectStatus(project: Project) {
   });
 }
 export async function removeProject(id: string) {
-  await deleteDoc(doc(database(), 'projects', id));
+  await runTransaction(database(), async tx => {
+    const ref = doc(database(), 'projects', id);
+    const existing = await tx.get(ref);
+    if (!existing.exists()) return;
+    tx.delete(ref);
+    tx.set(doc(collection(database(), 'auditLogs')), { action: 'project.delete', entityType: 'project', entityId: id, adminUid: auth?.currentUser?.uid || '', summary: 'Deleted project record; media retained', result: 'success', createdAt: serverTimestamp() });
+  });
 }
 export async function reorderProject(items: Project[], id: string, direction: -1 | 1) {
   const index = items.findIndex((p) => p.id === id);
@@ -193,4 +208,19 @@ export async function removeCmsItem(name: CmsCollection, id: string) {
 export async function updateEnquiry(id: string, status: Enquiry['status'], internalNote = '') {
   await updateDoc(doc(database(), 'enquiries', id), { status, internalNote: internalNote.slice(0, 2000), updatedAt: serverTimestamp() });
 }
-export async function removeEnquiry(id: string) { await deleteDoc(doc(database(), 'enquiries', id)); }
+export function watchCleanupJobs(next: (items: CleanupJob[]) => void, fail: (error: Error) => void) {
+  return onSnapshot(collection(database(), 'cleanupJobs'), snap => next(snap.docs.map(d => ({ ...d.data(), id: d.id } as CleanupJob))), fail);
+}
+export async function removeEnquiry(id: string) {
+  await runTransaction(database(), async tx => {
+    const ref = doc(database(), 'enquiries', id);
+    const existing = await tx.get(ref);
+    if (!existing.exists()) return;
+    tx.delete(ref);
+    tx.set(doc(collection(database(), 'auditLogs')), {
+      action: 'enquiry.delete', entityType: 'enquiry', entityId: id,
+      adminUid: auth?.currentUser?.uid || '', summary: 'Permanently deleted enquiry record',
+      result: 'success', createdAt: serverTimestamp(),
+    });
+  });
+}

@@ -8,21 +8,66 @@ service cloud.firestore {
     function optionalText(data, key, max) { return !(key in data) || text(data, key, max); }
     function url(value) { return value is string && value.size() <= 2048 && value.matches('https://[^@/ ]+(/[^ ]*)?'); }
     function optionalUrl(data, key) { return !(key in data) || data[key] == '' || url(data[key]); }
+    function optionalList(data, key, max) { return !(key in data) || (data[key] is list && data[key].size() <= max); }
+    function galleryItem(item) {
+      return item is map
+        && item.keys().hasOnly(['id','url','publicId','mediaId','alt','order','caption','ownership'])
+        && item.keys().hasAll(['id','url','alt','order','ownership'])
+        && text(item, 'id', 100) && url(item.url) && text(item, 'alt', 300) && item.alt.size() > 0
+        && item.order is int && item.order >= 0 && item.order < 5
+        && optionalText(item, 'caption', 500) && optionalText(item, 'publicId', 500) && optionalText(item, 'mediaId', 200)
+        && item.ownership in ['cloudinary-managed','external','local-static']
+        && (item.ownership != 'cloudinary-managed' || (text(item,'publicId',500) && text(item,'mediaId',200)));
+    }
+    function galleryValid(d) {
+      return d.gallery is list && d.gallery.size() >= 1 && d.gallery.size() <= 5
+        && galleryItem(d.gallery[0])
+        && (d.gallery.size() < 2 || galleryItem(d.gallery[1]))
+        && (d.gallery.size() < 3 || galleryItem(d.gallery[2]))
+        && (d.gallery.size() < 4 || galleryItem(d.gallery[3]))
+        && (d.gallery.size() < 5 || galleryItem(d.gallery[4]))
+        && text(d,'coverImageId',100)
+        && (d.coverImageId == d.gallery[0].id
+          || (d.gallery.size() > 1 && d.coverImageId == d.gallery[1].id)
+          || (d.gallery.size() > 2 && d.coverImageId == d.gallery[2].id)
+          || (d.gallery.size() > 3 && d.coverImageId == d.gallery[3].id)
+          || (d.gallery.size() > 4 && d.coverImageId == d.gallery[4].id))
+        && d.mediaIds is list && d.mediaIds.size() <= 5;
+    }
+    function categoryFieldsValid(d) {
+      return d.categoryFields is map
+        && ((d.category == 'website' && d.categoryFields.keys().hasOnly(['technologies','liveUrl','majorFeatures','responsiveSupport','hostingPlatform']))
+          || (d.category == 'webapp' && d.categoryFields.keys().hasOnly(['technologies','liveUrl','majorFeatures','userRoles','backendDatabase','authentication','hostingPlatform']))
+          || (d.category == 'app' && d.categoryFields.keys().hasOnly(['technologies','platform','liveUrl','majorFeatures','appStatus']))
+          || (d.category == 'logo' && d.categoryFields.keys().hasOnly(['designTools','brandIndustry','designStyle','colourPalette','brandBrief']))
+          || (d.category == 'poster' && d.categoryFields.keys().hasOnly(['designTools','posterType','targetAudience','designStyle','campaignName']))
+          || (d.category == 'automation' && d.categoryFields.keys().hasOnly(['toolsPlatforms','integrations','trigger','automatedWorkflow','businessOutcome','demoUrl'])))
+        && optionalList(d.categoryFields,'technologies',30) && optionalList(d.categoryFields,'majorFeatures',30)
+        && optionalList(d.categoryFields,'userRoles',30) && optionalList(d.categoryFields,'designTools',30)
+        && optionalList(d.categoryFields,'toolsPlatforms',30) && optionalList(d.categoryFields,'integrations',30)
+        && optionalUrl(d.categoryFields,'liveUrl') && optionalUrl(d.categoryFields,'demoUrl');
+    }
+    function projectSchemaValid(d) {
+      return ('schemaVersion' in d)
+        ? (d.schemaVersion == 2 && galleryValid(d) && categoryFieldsValid(d))
+        : url(d.image);
+    }
     function projectValid(d, slug) {
-      return d.keys().hasOnly(['slug','order','title','category','categoryLabel','tag','summary','fullDescription','technologies','liveUrl','role','client','timeline','deliverables','status','image','thumbnail','bannerImage','challenge','solution','createdAt','updatedAt'])
-        && d.keys().hasAll(['slug','order','title','category','categoryLabel','tag','summary','technologies','role','status','image','thumbnail','createdAt','updatedAt'])
+      return d.keys().hasOnly(['slug','order','title','category','categoryLabel','tag','summary','fullDescription','technologies','liveUrl','role','client','timeline','deliverables','status','image','thumbnail','bannerImage','challenge','solution','createdAt','updatedAt','schemaVersion','gallery','coverImageId','categoryFields','mediaIds'])
+        && d.keys().hasAll(['slug','order','title','category','categoryLabel','tag','summary','role','status','createdAt','updatedAt'])
         && d.slug == slug && slug.size() <= 80 && slug.matches('[a-z0-9]+(-[a-z0-9]+)*')
         && d.order is int && d.order >= 0 && d.order <= 9007199254740991
         && text(d, 'title', 120) && d.title.size() > 0
         && text(d, 'summary', 600) && d.summary.size() > 0
         && d.category in ['website','webapp','poster','logo','automation','app']
         && text(d, 'categoryLabel', 80) && text(d, 'tag', 120) && text(d, 'role', 200)
-        && d.status in ['draft','published'] && url(d.image) && optionalUrl(d, 'thumbnail') && optionalUrl(d, 'bannerImage') && optionalUrl(d, 'liveUrl')
-        && d.technologies is list && d.technologies.size() <= 30
+        && d.status in ['draft','published'] && optionalUrl(d, 'image') && optionalUrl(d, 'thumbnail') && optionalUrl(d, 'bannerImage') && optionalUrl(d, 'liveUrl')
+        && optionalList(d, 'technologies', 30)
         && (!('solution' in d) || (d.solution is list && d.solution.size() <= 30))
         && optionalText(d, 'fullDescription', 10000) && optionalText(d, 'challenge', 10000)
         && optionalText(d, 'client', 200) && optionalText(d, 'timeline', 200) && optionalText(d, 'deliverables', 1000)
-        && d.createdAt is timestamp && d.updatedAt == request.time;
+        && d.createdAt is timestamp && d.updatedAt == request.time
+        && projectSchemaValid(d);
     }
     match /access/admin {
       allow get: if request.auth != null && resource.data.uid == request.auth.uid;
@@ -30,8 +75,9 @@ service cloud.firestore {
     }
     match /projects/{slug} {
       allow read: if resource.data.status == 'published' || admin();
-      allow create: if admin() && projectValid(request.resource.data, slug) && request.resource.data.createdAt == request.time;
-      allow update: if admin() && projectValid(request.resource.data, slug) && request.resource.data.createdAt == resource.data.createdAt;
+      allow create: if admin() && projectValid(request.resource.data, slug) && request.resource.data.createdAt == request.time && !('bannerImage' in request.resource.data);
+      allow update: if admin() && projectValid(request.resource.data, slug) && request.resource.data.createdAt == resource.data.createdAt
+        && (!('bannerImage' in request.resource.data) || (('bannerImage' in resource.data) && request.resource.data.bannerImage == resource.data.bannerImage));
       allow delete: if admin();
     }
     match /settings/public {
