@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Project } from '../types';
-import { PROJECT_CATEGORIES } from '../lib/projects';
 
 export function ProjectGallery({ project, compact = false }: { project: Project; compact?: boolean }) {
   const items = project.gallery;
@@ -29,12 +28,11 @@ export function ProjectGallery({ project, compact = false }: { project: Project;
     setActive((current) => (current + direction + items.length) % items.length);
   };
   const select = (index: number) => { setUserPaused(true); setActive(index); };
-  const ratio = PROJECT_CATEGORIES[project.category].ratio;
 
   return (
     <div
-      className="group relative overflow-hidden rounded-xl border border-[#c8c4d8]/70 bg-[#f1f3f5]"
-      style={{ aspectRatio: compact ? ratio : project.category === 'poster' ? '4 / 5' : '16 / 9' }}
+      className={`group relative overflow-hidden rounded-xl border border-[#c8c4d8]/70 bg-[#f1f3f5] ${compact ? 'h-[260px] sm:h-[280px] md:h-[320px] lg:h-[360px]' : ''}`}
+      style={compact ? undefined : { aspectRatio: project.category === 'poster' ? '4 / 5' : '16 / 9' }}
       role="region"
       aria-roledescription="carousel"
       aria-label={`${project.title} image gallery`}

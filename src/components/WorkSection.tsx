@@ -98,50 +98,52 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
             <article
               key={project.id}
               id={`project-card-${project.id}`}
-              className="bg-white border border-[#c8c4d8] rounded-2xl p-4 sm:p-5 lg:p-6 shadow-sm hover:shadow-md transition-all duration-300"
+              className="mx-auto max-w-[1050px] bg-white border border-[#c8c4d8] rounded-2xl p-4 sm:p-6 lg:p-7 shadow-sm hover:shadow-md transition-all duration-300"
             >
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 items-center">
+              <div className="grid grid-cols-1 md:grid-cols-[minmax(0,9fr)_minmax(0,11fr)] gap-5 md:gap-6 lg:gap-7 items-center">
                 {/* Left Info Column */}
-                <div className="lg:col-span-5 flex flex-col justify-between space-y-5">
+                <div className="order-2 md:order-1 flex min-w-0 flex-col space-y-4">
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-1 rounded-full bg-[#e9edff] text-[#422cd8] text-xs font-semibold tracking-wide uppercase">
+                      <span className="px-2 py-0.5 rounded-full bg-[#e9edff] text-[#422cd8] text-[11px] font-semibold tracking-wide uppercase">
                         {project.tag}
                       </span>
-                      <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded text-xs font-medium border border-emerald-200">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] font-medium border border-emerald-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                         {project.status === 'published' ? 'Published' : 'Internal Draft'}
                       </span>
                     </div>
 
-                    <h3 className="text-2xl md:text-3xl font-bold text-[#141b2b]">
+                    <h3 className="text-2xl md:text-[28px] lg:text-[30px] leading-tight font-bold text-[#141b2b]">
                       {project.title}
                     </h3>
 
-                    <p className="text-sm md:text-base text-[#474555] leading-relaxed">
+                    <p className="text-base text-[#474555] leading-6">
                       {project.summary}
                     </p>
                   </div>
 
                   {/* Tech Stack Tags */}
-                  <div>
-                    <p className="text-xs text-[#474555] uppercase tracking-wider mb-2 font-semibold">
-                      Technologies Utilized
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {technologies.map((tech, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 rounded-md bg-[#f1f3ff] border border-[#c8c4d8]/60 text-[#141b2b] text-xs font-medium"
-                        >
-                          {tech}
-                        </span>
-                      ))}
+                  {technologies.length > 0 && (
+                    <div>
+                      <p className="text-[11px] text-[#474555] uppercase tracking-wider mb-2 font-semibold">
+                        Technologies Utilized
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {technologies.map((tech, index) => (
+                          <span
+                            key={index}
+                            className="px-2.5 py-0.5 rounded-md bg-[#f1f3ff] border border-[#c8c4d8]/60 text-[#141b2b] text-[11px] font-medium"
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Action CTAs */}
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
                     <a
                       id={`btn-view-details-${project.id}`}
                       href={`/projects/${project.slug}`}
@@ -151,7 +153,7 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
                           onSelectProject(project);
                         }
                       }}
-                      className="inline-flex items-center justify-center h-10 px-5 rounded-lg bg-[#5b4cf0] text-white text-sm font-semibold hover:bg-[#422cd8] transition-all duration-150 gap-1.5 shadow-xs active:scale-[0.98] cursor-pointer"
+                      className="inline-flex min-h-11 md:min-h-10 items-center justify-center px-4 rounded-lg bg-[#5b4cf0] text-white text-sm font-semibold hover:bg-[#422cd8] transition-all duration-150 gap-1.5 shadow-xs active:scale-[0.98] cursor-pointer"
                     >
                       <span>View Project Details</span>
                       <ArrowRight className="w-4 h-4" />
@@ -163,7 +165,7 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
                         href={cta.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center h-10 px-4 rounded-lg bg-white border border-[#c8c4d8] text-[#141b2b] hover:bg-[#f1f3ff] transition-all duration-150 text-sm font-semibold gap-1.5 cursor-pointer"
+                        className="inline-flex min-h-11 md:min-h-10 items-center justify-center px-3.5 rounded-lg bg-white border border-[#c8c4d8] text-[#141b2b] hover:bg-[#f1f3ff] transition-all duration-150 text-sm font-semibold gap-1.5 cursor-pointer"
                       >
                         <span>{cta.label}</span>
                         <ExternalLink className="w-4 h-4 text-[#474555]" />
@@ -173,7 +175,7 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
                 </div>
 
                 {/* Direct project media, without decorative browser chrome. */}
-                <div className="lg:col-span-7">
+                <div className="order-1 min-w-0 md:order-2">
                   <ProjectGallery project={project} compact />
                 </div>
               </div>
