@@ -1,6 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+<<<<<<< HEAD
     function admin() {
       return request.auth != null && request.auth.uid == get(/databases/$(database)/documents/access/admin).data.uid;
     }
@@ -91,6 +92,28 @@ service cloud.firestore {
       allow read, delete: if admin();
       allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','internalNote','updatedAt'])
         && request.resource.data.status in ['new','read','reviewed','contacted','closed'] && optionalText(request.resource.data,'internalNote',2000);
+=======
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+    function validProject(data) {
+      return data.keys().hasAll(['title', 'slug', 'shortDescription', 'category', 'projectType', 'status', 'coverImage', 'galleryImages', 'technologies', 'features', 'featured', 'published', 'displayOrder', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 120
+        && data.slug is string && data.slug.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$')
+        && data.shortDescription is string && data.shortDescription.size() > 0 && data.shortDescription.size() <= 220
+        && data.category in ['Websites', 'Posters', 'Logos', 'Automations', 'Apps']
+        && data.status in ['Completed', 'In Progress', 'Concept']
+        && data.published is bool && data.featured is bool
+        && data.displayOrder is int && data.displayOrder >= 0
+        && data.technologies is list && data.technologies.size() <= 20
+        && data.features is list && data.features.size() <= 30
+        && data.galleryImages is list && data.galleryImages.size() <= 30;
+    }
+    match /projects/{projectId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow create, update: if isAdmin() && validProject(request.resource.data);
+      allow delete: if isAdmin();
+>>>>>>> 0949a13 (changes)
     }
     match /{document=**} { allow read, write: if false; }
   }

@@ -1,8 +1,11 @@
+<<<<<<< HEAD
 import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { initializeFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken } from 'firebase/app-check';
 
+=======
+>>>>>>> 0949a13 (changes)
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -11,6 +14,7 @@ const config = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
+<<<<<<< HEAD
 export const firebaseConfigured = Boolean(
   config.apiKey && config.authDomain && config.projectId && config.appId,
 );
@@ -50,4 +54,36 @@ export async function appCheckToken() {
   if (!appCheck)
     throw new Error('Enquiries are temporarily unavailable. Please use the email link.');
   return (await getToken(appCheck)).token;
+=======
+
+export const firebaseConfigured = Object.values(config).every(Boolean);
+export let db: import("firebase/firestore").Firestore | undefined;
+export let storage: import("firebase/storage").FirebaseStorage | undefined;
+let servicesPromise: Promise<{
+  auth: import("firebase/auth").Auth;
+  db: import("firebase/firestore").Firestore;
+  storage: import("firebase/storage").FirebaseStorage;
+}> | null;
+
+export function getFirebaseServices() {
+  if (!firebaseConfigured) return Promise.resolve(null);
+  if (!servicesPromise) {
+    servicesPromise = Promise.all([
+      import("firebase/app"),
+      import("firebase/auth"),
+      import("firebase/firestore"),
+      import("firebase/storage"),
+    ]).then(([appModule, authModule, firestoreModule, storageModule]) => {
+      const app = appModule.getApps()[0] || appModule.initializeApp(config);
+      db = firestoreModule.getFirestore(app);
+      storage = storageModule.getStorage(app);
+      return {
+        auth: authModule.getAuth(app),
+        db,
+        storage,
+      };
+    });
+  }
+  return servicesPromise;
+>>>>>>> 0949a13 (changes)
 }
