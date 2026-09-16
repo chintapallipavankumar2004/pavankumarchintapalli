@@ -1,4 +1,6 @@
 import type {
+  GalleryDisplaySettings,
+  GalleryPresetRatio,
   MediaOwnership,
   Project,
   ProjectCategory,
@@ -27,6 +29,79 @@ export interface ProjectCategoryDefinition {
 
 const technologies: CategoryFieldDefinition = { key: 'technologies', label: 'Technologies', kind: 'list', max: 30 };
 const majorFeatures: CategoryFieldDefinition = { key: 'majorFeatures', label: 'Major features', kind: 'list', max: 30 };
+
+export const GALLERY_PRESET_RATIOS: Record<GalleryPresetRatio, number> = {
+  '1:1': 1,
+  '4:5': 4 / 5,
+  '4:3': 4 / 3,
+  '3:2': 3 / 2,
+  '16:9': 16 / 9,
+  '9:16': 9 / 16,
+};
+
+const MAX_IMAGE_DIMENSION = 100_000;
+const ratioModes = new Set(['original', 'preset', 'custom']);
+const fits = new Set(['contain', 'cover']);
+const presetRatios = new Set(Object.keys(GALLERY_PRESET_RATIOS));
+
+const validDimension = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= MAX_IMAGE_DIMENSION;
+const normalizedDimension = (value: unknown) => validDimension(value) ? Math.round((value as number) * 1000) / 1000 : undefined;
+
+export function normalizeGalleryDisplaySettings(value: unknown): GalleryDisplaySettings {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { ratioMode: 'original', fit: 'contain' };
+  const input = value as Partial<GalleryDisplaySettings>;
+  const ratioMode = ratioModes.has(String(input.ratioMode)) ? input.ratioMode as GalleryDisplaySettings['ratioMode'] : 'original';
+  const naturalWidth = normalizedDimension(input.naturalWidth);
+  const naturalHeight = normalizedDimension(input.naturalHeight);
+  return {
+    ratioMode,
+    ...(ratioMode === 'preset' && presetRatios.has(String(input.presetRatio)) ? { presetRatio: input.presetRatio as GalleryPresetRatio } : {}),
+    ...(ratioMode === 'custom' ? {
+      ...(normalizedDimension(input.customRatioWidth) !== undefined ? { customRatioWidth: normalizedDimension(input.customRatioWidth) } : {}),
+      ...(normalizedDimension(input.customRatioHeight) !== undefined ? { customRatioHeight: normalizedDimension(input.customRatioHeight) } : {}),
+    } : {}),
+    fit: fits.has(String(input.fit)) ? input.fit as GalleryDisplaySettings['fit'] : 'contain',
+    ...(naturalWidth !== undefined && naturalHeight !== undefined ? { naturalWidth, naturalHeight } : {}),
+  };
+}
+
+function validateGalleryDisplaySettings(value: unknown, imageNumber: number) {
+  if (value === undefined) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`Gallery image ${imageNumber} display settings are invalid.`);
+  const input = value as Record<string, unknown>;
+  const allowed = new Set(['ratioMode','presetRatio','customRatioWidth','customRatioHeight','fit','naturalWidth','naturalHeight']);
+  if (Object.keys(input).some((key) => !allowed.has(key))) throw new Error(`Gallery image ${imageNumber} display settings contain unsupported fields.`);
+  if (!ratioModes.has(String(input.ratioMode)) || !fits.has(String(input.fit))) throw new Error(`Gallery image ${imageNumber} display settings are invalid.`);
+  if (input.ratioMode === 'preset' && !presetRatios.has(String(input.presetRatio))) throw new Error(`Select a valid display ratio for gallery image ${imageNumber}.`);
+  if (input.ratioMode === 'custom' && (!validDimension(input.customRatioWidth) || !validDimension(input.customRatioHeight))) throw new Error(`Custom ratio width and height for gallery image ${imageNumber} must be positive numbers no greater than ${MAX_IMAGE_DIMENSION.toLocaleString()}.`);
+  const hasNaturalWidth = input.naturalWidth !== undefined;
+  const hasNaturalHeight = input.naturalHeight !== undefined;
+  if (hasNaturalWidth !== hasNaturalHeight || (hasNaturalWidth && (!validDimension(input.naturalWidth) || !validDimension(input.naturalHeight)))) throw new Error(`Natural dimensions for gallery image ${imageNumber} are invalid.`);
+}
+
+export function galleryAspectRatio(item: ProjectGalleryItem, fallback = 16 / 9) {
+  const display = normalizeGalleryDisplaySettings(item.display);
+  if (display.ratioMode === 'preset' && display.presetRatio) return GALLERY_PRESET_RATIOS[display.presetRatio];
+  if (display.ratioMode === 'custom' && display.customRatioWidth && display.customRatioHeight) return display.customRatioWidth / display.customRatioHeight;
+  if (display.naturalWidth && display.naturalHeight) return display.naturalWidth / display.naturalHeight;
+  return fallback;
+}
+
+export function galleryRatioLabel(item: ProjectGalleryItem, fallback = 16 / 9) {
+  const display = normalizeGalleryDisplaySettings(item.display);
+  if (display.ratioMode === 'preset' && display.presetRatio) return display.presetRatio;
+  if (display.ratioMode === 'custom' && display.customRatioWidth && display.customRatioHeight) return `${display.customRatioWidth} / ${display.customRatioHeight}`;
+  if (display.naturalWidth && display.naturalHeight) return `${display.naturalWidth} / ${display.naturalHeight}`;
+  return `${Math.round(fallback * 1000) / 1000} / 1`;
+}
+
+export function significantDisplayRatioDifference(item: ProjectGalleryItem, fallback = 16 / 9) {
+  const display = normalizeGalleryDisplaySettings(item.display);
+  if (display.ratioMode === 'original' || !display.naturalWidth || !display.naturalHeight) return false;
+  const original = display.naturalWidth / display.naturalHeight;
+  const selected = galleryAspectRatio(item, fallback);
+  return Math.abs(original - selected) / selected > 0.2;
+}
 
 export const PROJECT_CATEGORIES: Record<ProjectCategory, ProjectCategoryDefinition> = {
   website: {
@@ -106,6 +181,7 @@ export function normalizeGallery(input: Partial<Project> & Record<string, unknow
         ...(item.caption ? { caption: item.caption } : {}),
         order: Number.isInteger(item.order) ? item.order : index,
         ownership: item.ownership || ownership(item.url),
+        display: normalizeGalleryDisplaySettings(item.display),
       }))
       .sort((a, b) => a.order - b.order)
       .slice(0, 5)
@@ -113,7 +189,7 @@ export function normalizeGallery(input: Partial<Project> & Record<string, unknow
   }
   const legacyUrl = typeof input.image === 'string' ? input.image : '';
   return legacyUrl
-    ? [{ id: 'legacy-cover', url: legacyUrl, alt: String(input.title || 'Project image'), order: 0, ownership: ownership(legacyUrl) }]
+    ? [{ id: 'legacy-cover', url: legacyUrl, alt: String(input.title || 'Project image'), order: 0, ownership: ownership(legacyUrl), display: normalizeGalleryDisplaySettings(undefined) }]
     : [];
 }
 
@@ -193,6 +269,7 @@ export function validateProject(project: Project) {
     if (!['cloudinary-managed', 'external', 'local-static'].includes(item.ownership)) throw new Error('Gallery asset ownership is invalid.');
     if (item.ownership === 'cloudinary-managed' && (!item.mediaId || !item.publicId)) throw new Error('Managed gallery images must include their media identifiers.');
     if ((item.mediaId || '').length > 200 || (item.publicId || '').length > 500) throw new Error('Gallery media identifiers are too long.');
+    validateGalleryDisplaySettings(item.display, index + 1);
   });
   if (!ids.has(project.coverImageId)) throw new Error('Select a gallery cover image.');
   const fields = sanitizeCategoryFields(project.category, project.categoryFields);
@@ -215,8 +292,9 @@ export function projectWriteFields(project: Project) {
   if (!Array.isArray(project.gallery) || project.gallery.length < 1 || project.gallery.length > 5) throw new Error('Add between 1 and 5 gallery images.');
   const allowedProjectKeys = new Set(['id','slug','order','title','category','categoryLabel','tag','summary','fullDescription','categoryFields','gallery','coverImageId','schemaVersion','mediaIds','technologies','liveUrl','role','client','timeline','deliverables','status','image','thumbnail','bannerImage','lastUpdated','challenge','solution','createdAt','updatedAt']);
   if (Object.keys(project).some((key) => !allowedProjectKeys.has(key))) throw new Error('The project contains unsupported fields.');
-  const allowedGalleryKeys = new Set(['id','url','publicId','mediaId','alt','order','caption','ownership']);
+  const allowedGalleryKeys = new Set(['id','url','publicId','mediaId','alt','order','caption','ownership','display']);
   if (project.gallery.some((item) => Object.keys(item).some((key) => !allowedGalleryKeys.has(key)))) throw new Error('A gallery image contains unsupported fields.');
+  project.gallery.forEach((item, index) => validateGalleryDisplaySettings(item.display, index + 1));
   const allowedCategoryKeys = categoryFieldKeys(normalizeProjectCategory(project.category, project.categoryLabel, project.tag));
   if (Object.keys(project.categoryFields || {}).some((key) => !allowedCategoryKeys.has(key as keyof ProjectCategoryFields))) throw new Error('Remove fields that do not belong to the selected category.');
   const normalized = normalizeProject(project as Project & Record<string, unknown>);
@@ -246,6 +324,7 @@ export function projectWriteFields(project: Project) {
       order,
       caption: item.caption?.trim() || '',
       ownership: item.ownership,
+      display: normalizeGalleryDisplaySettings(item.display),
     })),
     categoryFields: canonicalCategoryFields(normalized.category, normalized.categoryFields),
     mediaIds: normalized.gallery.flatMap((item) => item.mediaId ? [item.mediaId] : []),

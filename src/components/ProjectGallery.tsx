@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Project } from '../types';
+import { PROJECT_CATEGORIES, galleryAspectRatio, normalizeGalleryDisplaySettings } from '../lib/projects';
 
-export function ProjectGallery({ project, compact = false }: { project: Project; compact?: boolean }) {
+export function ProjectGallery({ project }: { project: Project }) {
   const items = project.gallery;
   const [active, setActive] = useState(() => Math.max(0, items.findIndex((item) => item.id === project.coverImageId)));
+  const [loadedRatios, setLoadedRatios] = useState<Record<string, number>>({});
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [userPaused, setUserPaused] = useState(false);
@@ -14,6 +16,7 @@ export function ProjectGallery({ project, compact = false }: { project: Project;
   useEffect(() => {
     setActive(Math.max(0, items.findIndex((item) => item.id === project.coverImageId)));
     setUserPaused(false);
+    setLoadedRatios({});
   }, [project.id, project.coverImageId, items.length]);
 
   useEffect(() => {
@@ -23,6 +26,12 @@ export function ProjectGallery({ project, compact = false }: { project: Project;
   }, [multiple, hovered, focused, userPaused, items.length]);
 
   if (!items.length) return null;
+  const activeItem = items[active] || items[0];
+  const activeDisplay = normalizeGalleryDisplaySettings(activeItem.display);
+  const hasStoredOriginalRatio = !!(activeDisplay.naturalWidth && activeDisplay.naturalHeight);
+  const ratio = activeDisplay.ratioMode === 'original' && !hasStoredOriginalRatio && loadedRatios[activeItem.id]
+    ? loadedRatios[activeItem.id]
+    : galleryAspectRatio(activeItem, PROJECT_CATEGORIES[project.category].ratio);
   const move = (direction: -1 | 1) => {
     setUserPaused(true);
     setActive((current) => (current + direction + items.length) % items.length);
@@ -31,8 +40,11 @@ export function ProjectGallery({ project, compact = false }: { project: Project;
 
   return (
     <div
-      className={`group relative overflow-hidden rounded-xl border border-[#c8c4d8]/70 bg-[#f1f3f5] ${compact ? 'h-[260px] sm:h-[280px] md:h-[320px] lg:h-[360px]' : ''}`}
-      style={compact ? undefined : { aspectRatio: project.category === 'poster' ? '4 / 5' : '16 / 9' }}
+      data-gallery-frame
+      data-display-ratio={ratio}
+      data-fit={activeDisplay.fit}
+      className="group relative mx-auto w-full max-w-full overflow-hidden rounded-xl border border-[#c8c4d8]/70 bg-[#f1f3f5] transition-[width,aspect-ratio] duration-300 motion-reduce:transition-none"
+      style={{ aspectRatio: String(ratio), maxWidth: `min(100%, ${72 * ratio}vh, ${760 * ratio}px)`, maxHeight: 'min(72vh, 760px)' }}
       role="region"
       aria-roledescription="carousel"
       aria-label={`${project.title} image gallery`}
@@ -62,7 +74,13 @@ export function ProjectGallery({ project, compact = false }: { project: Project;
             alt={item.alt}
             loading={index === 0 ? 'eager' : 'lazy'}
             decoding="async"
-            className="h-full w-full object-contain"
+            className={`h-full w-full ${normalizeGalleryDisplaySettings(item.display).fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              if (!image.naturalWidth || !image.naturalHeight) return;
+              const next = image.naturalWidth / image.naturalHeight;
+              setLoadedRatios((current) => current[item.id] === next ? current : { ...current, [item.id]: next });
+            }}
           />
           {item.caption && index === active && (
             <figcaption className="absolute inset-x-0 bottom-0 bg-[#141b2b]/85 px-4 py-2 text-sm text-white backdrop-blur-sm">{item.caption}</figcaption>

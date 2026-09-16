@@ -10,6 +10,7 @@ export function MediaField({
   onBusy,
   onUploaded,
   category,
+  showPreview = true,
 }: {
   label: string;
   value: string;
@@ -18,6 +19,7 @@ export function MediaField({
   onBusy: (value: boolean) => void;
   onUploaded?: (asset: MediaAsset) => void;
   category?: ProjectCategory;
+  showPreview?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -83,7 +85,7 @@ export function MediaField({
         </p>
       )}
       {warning && <p role="status" className="text-amber-800 text-sm">{warning}</p>}
-      {kind === 'image' && value.startsWith('https://') && (
+      {showPreview && kind === 'image' && value.startsWith('https://') && (
         <img
           src={value}
           alt="Selected image preview"

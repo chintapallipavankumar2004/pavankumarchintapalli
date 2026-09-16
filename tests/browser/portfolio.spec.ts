@@ -39,8 +39,8 @@ test.beforeAll(async () => {
       role: '',
       schemaVersion: 2,
       gallery: [
-        { id:'cover', url:'https://example.com/project.png', alt:'Published project home screen', order:0, ownership:'external' },
-        { id:'detail', url:'https://example.com/project-detail.png', alt:'Published project detail screen', order:1, ownership:'external' },
+        { id:'cover', url:'https://example.com/project.png', alt:'Published project home screen', order:0, ownership:'external', display:{ratioMode:'custom',customRatioWidth:1090,customRatioHeight:1080,fit:'contain',naturalWidth:1090,naturalHeight:1080} },
+        { id:'detail', url:'https://example.com/project-detail.png', alt:'Published project detail screen', order:1, ownership:'external', display:{ratioMode:'preset',presetRatio:'16:9',fit:'cover',naturalWidth:1600,naturalHeight:900} },
       ],
       coverImageId: 'cover',
       mediaIds: [],
@@ -128,14 +128,52 @@ test('public routes exclude drafts, survive refresh and browser history, and pre
     expect(overflow.scrollWidth, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
   }
   await page.screenshot({ path: 'test-results/public-desktop.png', fullPage: true });
+  const logoCard=page.locator('#project-card-logo-project');
+  await expect(logoCard.getByRole('link',{name:/Visit Website|Open Application|View App|View Demo/})).toHaveCount(0);
+  await page.locator('#project-card-published-project').getByRole('link', { name: 'View Project Details' }).click();
   const gallery=page.getByRole('region',{name:'Published Test Project image gallery'});
   await gallery.focus();
   await gallery.press('ArrowRight');
   await expect(gallery.getByAltText('Published project detail screen')).toBeVisible();
   await expect(page.getByText('example.com',{exact:false})).toHaveCount(0);
-  const logoCard=page.locator('#project-card-logo-project');
-  await expect(logoCard.getByRole('link',{name:/Visit Website|Open Application|View App|View Demo/})).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('Work carousel is responsive and project details preserve per-image display ratios', async ({ page }) => {
+  await page.goto('/');
+  const carousel=page.getByRole('region',{name:'Published projects'});
+  await expect(carousel).toBeVisible();
+  await expect(page.locator('#work').getByRole('region',{name:/image gallery/})).toHaveCount(0);
+
+  for (const [width,min,max] of [[375,0.94,1.01],[768,0.45,0.52],[1366,0.30,0.35]] as const) {
+    await page.setViewportSize({width,height:900});
+    const proportions=await page.locator('#project-card-published-project').evaluate((card) => {
+      const track=card.parentElement;
+      return {card:card.getBoundingClientRect().width,track:track?.getBoundingClientRect().width || 1,page:document.documentElement.scrollWidth,viewport:window.innerWidth};
+    });
+    expect(proportions.card/proportions.track).toBeGreaterThanOrEqual(min);
+    expect(proportions.card/proportions.track).toBeLessThanOrEqual(max);
+    expect(proportions.page).toBeLessThanOrEqual(proportions.viewport+1);
+  }
+
+  await page.setViewportSize({width:375,height:900});
+  await expect(page.getByRole('button',{name:'Previous projects'})).toBeDisabled();
+  await expect(page.getByRole('button',{name:'Next projects'})).toBeEnabled();
+  await carousel.focus();
+  await carousel.press('ArrowRight');
+  await expect.poll(() => carousel.evaluate((node) => node.scrollLeft)).toBeGreaterThan(20);
+  await expect(page.getByRole('button',{name:'Previous projects'})).toBeEnabled();
+  await expect(page.getByRole('button',{name:'Next projects'})).toBeDisabled();
+
+  await page.locator('#project-card-published-project').getByRole('link',{name:'View Project Details'}).click();
+  const frame=page.locator('[data-gallery-frame]');
+  await expect(frame).toHaveAttribute('data-fit','contain');
+  expect(Number(await frame.getAttribute('data-display-ratio'))).toBeCloseTo(1090/1080,5);
+  const gallery=page.getByRole('region',{name:'Published Test Project image gallery'});
+  await gallery.getByRole('button',{name:'Next image'}).click();
+  await expect(frame).toHaveAttribute('data-fit','cover');
+  expect(Number(await frame.getAttribute('data-display-ratio'))).toBeCloseTo(16/9,5);
+  await expect(gallery.getByAltText('Published project detail screen')).toHaveClass(/object-cover/);
 });
 test('service selection works; missing App Check never produces a false success; resume is unavailable without a PDF', async ({
   page,

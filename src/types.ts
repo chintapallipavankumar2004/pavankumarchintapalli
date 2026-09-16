@@ -2,6 +2,19 @@ export type ViewMode = 'public' | 'project-detail' | 'admin-login' | 'admin-dash
 
 export type ProjectCategory = 'website' | 'webapp' | 'poster' | 'logo' | 'automation' | 'app';
 export type MediaOwnership = 'cloudinary-managed' | 'external' | 'local-static';
+export type GalleryRatioMode = 'original' | 'preset' | 'custom';
+export type GalleryPresetRatio = '1:1' | '4:5' | '4:3' | '3:2' | '16:9' | '9:16';
+export type GalleryFit = 'contain' | 'cover';
+
+export interface GalleryDisplaySettings {
+  ratioMode: GalleryRatioMode;
+  presetRatio?: GalleryPresetRatio;
+  customRatioWidth?: number;
+  customRatioHeight?: number;
+  fit: GalleryFit;
+  naturalWidth?: number;
+  naturalHeight?: number;
+}
 
 export interface ProjectGalleryItem {
   id: string;
@@ -12,6 +25,8 @@ export interface ProjectGalleryItem {
   order: number;
   caption?: string;
   ownership: MediaOwnership;
+  /** Missing on legacy records; normalization defaults to original ratio and contain. */
+  display?: GalleryDisplaySettings;
 }
 
 export type ProjectCategoryFields = Partial<Record<

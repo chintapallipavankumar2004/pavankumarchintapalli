@@ -1,9 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
-import type { Project, ProjectCategory, ProjectGalleryItem } from '../types';
+import type { GalleryDisplaySettings, GalleryPresetRatio, Project, ProjectCategory, ProjectGalleryItem } from '../types';
 import { categories, slugify } from '../lib/validation';
 import { MediaField } from './MediaField';
-import { PROJECT_CATEGORIES, normalizeProject, sanitizeCategoryFields } from '../lib/projects';
+import {
+  GALLERY_PRESET_RATIOS,
+  PROJECT_CATEGORIES,
+  galleryAspectRatio,
+  galleryRatioLabel,
+  normalizeGalleryDisplaySettings,
+  normalizeProject,
+  sanitizeCategoryFields,
+  significantDisplayRatioDifference,
+} from '../lib/projects';
 import { deleteMedia } from '../lib/uploads';
 
 interface Props {
@@ -21,8 +30,85 @@ const blankProject = (nextOrder: number): Project => normalizeProject({
 });
 
 const newGalleryItem = (order: number): ProjectGalleryItem => ({
-  id: crypto.randomUUID(), url: '', alt: '', order, ownership: 'external',
+  id: crypto.randomUUID(), url: '', alt: '', order, ownership: 'external', display: { ratioMode: 'original', fit: 'contain' },
 });
+
+const ratioOptions: Array<{ value: string; label: string }> = [
+  { value: 'original', label: 'Original image ratio' },
+  ...Object.keys(GALLERY_PRESET_RATIOS).map((ratio) => ({ value: `preset:${ratio}`, label: ratio })),
+  { value: 'custom', label: 'Custom ratio' },
+];
+
+function GalleryDisplayEditor({ item, imageNumber, category, onChange }: { item: ProjectGalleryItem; imageNumber: number; category: ProjectCategory; onChange: (values: Partial<ProjectGalleryItem>) => void }) {
+  const display = normalizeGalleryDisplaySettings(item.display);
+  const fallback = PROJECT_CATEGORIES[category].ratio;
+  const ratio = galleryAspectRatio(item, fallback);
+  const naturalLabel = display.naturalWidth && display.naturalHeight
+    ? `${display.naturalWidth} × ${display.naturalHeight} px (${Math.round((display.naturalWidth / display.naturalHeight) * 1000) / 1000}:1)`
+    : 'Detected after the image loads';
+  const selectedValue = display.ratioMode === 'preset' && display.presetRatio ? `preset:${display.presetRatio}` : display.ratioMode;
+  const updateDisplay = (next: GalleryDisplaySettings) => onChange({ display: next });
+  const natural = display.naturalWidth && display.naturalHeight ? { naturalWidth: display.naturalWidth, naturalHeight: display.naturalHeight } : {};
+
+  return (
+    <div className="space-y-3 rounded-lg border border-[#c8c4d8]/70 bg-white p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1">
+          <span className="font-semibold">Display ratio</span>
+          <select
+            aria-label={`Display ratio for image ${imageNumber}`}
+            value={selectedValue}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value.startsWith('preset:')) updateDisplay({ ratioMode: 'preset', presetRatio: value.slice(7) as GalleryPresetRatio, fit: display.fit, ...natural });
+              else if (value === 'custom') updateDisplay({ ratioMode: 'custom', fit: display.fit, ...natural });
+              else updateDisplay({ ratioMode: 'original', fit: display.fit, ...natural });
+            }}
+            className="h-10 w-full rounded-lg border border-[#c8c4d8] px-3"
+          >
+            {ratioOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="font-semibold">Image fitting</span>
+          <select aria-label={`Image fitting for image ${imageNumber}`} value={display.fit} onChange={(event) => updateDisplay({ ...display, fit: event.target.value as GalleryDisplaySettings['fit'] })} className="h-10 w-full rounded-lg border border-[#c8c4d8] px-3">
+            <option value="contain">Contain — recommended</option>
+            <option value="cover">Cover — may crop edges</option>
+          </select>
+        </label>
+      </div>
+      {display.ratioMode === 'custom' && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1"><span className="font-semibold">Ratio width</span><input aria-label={`Ratio width for image ${imageNumber}`} required type="number" min="0.001" max="100000" step="any" value={display.customRatioWidth ?? ''} onChange={(event) => updateDisplay({ ...display, customRatioWidth: event.target.value === '' ? undefined : Number(event.target.value) })} className="h-10 w-full rounded-lg border border-[#c8c4d8] px-3" /></label>
+          <label className="space-y-1"><span className="font-semibold">Ratio height</span><input aria-label={`Ratio height for image ${imageNumber}`} required type="number" min="0.001" max="100000" step="any" value={display.customRatioHeight ?? ''} onChange={(event) => updateDisplay({ ...display, customRatioHeight: event.target.value === '' ? undefined : Number(event.target.value) })} className="h-10 w-full rounded-lg border border-[#c8c4d8] px-3" /></label>
+        </div>
+      )}
+      <p className="text-xs text-[#474555]">Width and height define the responsive display ratio. The website preserves this shape but scales it to fit each visitor’s screen.</p>
+      <dl className="grid gap-1 text-xs text-[#474555] sm:grid-cols-2">
+        <div><dt className="font-semibold text-[#141b2b]">Actual dimensions</dt><dd>{naturalLabel}</dd></div>
+        <div><dt className="font-semibold text-[#141b2b]">Selected display ratio</dt><dd>{display.ratioMode === 'original' && !display.naturalWidth ? 'Original image ratio' : galleryRatioLabel(item, fallback)}</dd></div>
+      </dl>
+      {display.fit === 'cover' && <p role="status" className="text-sm text-amber-800">Cover fills the selected ratio and may crop image edges.</p>}
+      {significantDisplayRatioDifference(item, fallback) && <p role="status" className="text-sm text-amber-800">The uploaded image differs significantly from the selected display ratio. This is allowed, but contain may leave space and cover may crop edges.</p>}
+      {item.url && (
+        <div className="flex justify-center overflow-hidden rounded-lg bg-[#f1f3f5] p-2">
+          <div data-admin-ratio-preview className="w-full max-w-full overflow-hidden rounded-md bg-[#ececf2]" style={{ aspectRatio: String(ratio), maxWidth: `${Math.min(32, 13 * ratio)}rem` }}>
+            <img
+              src={item.url}
+              alt="Selected image ratio preview"
+              className={`h-full w-full ${display.fit === 'cover' ? 'object-cover' : 'object-contain'}`}
+              onLoad={(event) => {
+                const image = event.currentTarget;
+                if (!image.naturalWidth || !image.naturalHeight || (display.naturalWidth === image.naturalWidth && display.naturalHeight === image.naturalHeight)) return;
+                updateDisplay({ ...display, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight });
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder }: Props) {
   const initial = useMemo(() => projectToEdit ? normalizeProject(projectToEdit as Project & Record<string, unknown>) : blankProject(nextOrder), [projectToEdit, nextOrder]);
@@ -89,7 +175,7 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
     <div ref={dialog} id="modal-project-form" role="dialog" aria-modal="true" aria-labelledby="project-editor-title" className="w-full max-w-3xl bg-white rounded-2xl border border-[#c8c4d8] shadow-2xl p-4 sm:p-6 my-6 relative max-h-[94vh] overflow-y-auto custom-scrollbar">
       <button type="button" aria-label="Close project editor" disabled={busy || uploads > 0} onClick={requestClose} className="absolute right-4 top-4 h-11 w-11 flex items-center justify-center rounded-lg hover:bg-[#f1f3ff]"><X /></button>
       <h3 id="project-editor-title" className="text-xl font-bold mb-1">{projectToEdit ? 'Edit Project' : 'Add Project'}</h3>
-      <p className="text-sm text-[#474555] mb-5">Fields update to match the selected category. Gallery images are displayed without cropping.</p>
+      <p className="text-sm text-[#474555] mb-5">Fields update to match the selected category. Each gallery image can use its own responsive ratio and fitting.</p>
       <form onSubmit={async (event) => {
         event.preventDefault(); if (busy || uploads) return; setBusy(true); setError('');
         try {
@@ -118,12 +204,24 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
 
           <section aria-labelledby="gallery-title" className="space-y-3 border-t border-[#c8c4d8]/60 pt-4">
             <div className="flex items-center justify-between gap-3"><div><h4 id="gallery-title" className="font-bold text-base">Gallery</h4><p className="text-xs text-[#474555]">1-5 images. {PROJECT_CATEGORIES[data.category].guidance}; this is guidance, not a reason to stretch an image.</p></div><button type="button" disabled={data.gallery.length >= 5} onClick={() => setData((previous) => ({ ...previous, gallery: [...previous.gallery, newGalleryItem(previous.gallery.length)] }))} className="min-h-11 px-3 rounded-lg border border-[#c8c4d8] flex items-center gap-2 disabled:opacity-40"><Plus className="w-4 h-4" /> Add image</button></div>
-            {orderedGallery.map((item, index) => <article key={item.id} className="rounded-xl border border-[#c8c4d8] bg-[#f9f9ff] p-3 space-y-3">
-              <div className="flex items-center justify-between"><strong>Image {index + 1}</strong><div className="flex gap-1"><button type="button" aria-label={`Move image ${index + 1} up`} disabled={!index} onClick={() => setData((previous) => { const gallery=[...previous.gallery]; [gallery[index-1],gallery[index]]=[gallery[index],gallery[index-1]]; return {...previous,gallery}; })} className="h-11 w-11 flex items-center justify-center"><ChevronUp /></button><button type="button" aria-label={`Move image ${index + 1} down`} disabled={index === data.gallery.length - 1} onClick={() => setData((previous) => { const gallery=[...previous.gallery]; [gallery[index],gallery[index+1]]=[gallery[index+1],gallery[index]]; return {...previous,gallery}; })} className="h-11 w-11 flex items-center justify-center"><ChevronDown /></button><button type="button" aria-label={`Remove image ${index + 1}`} disabled={data.gallery.length <= 1} onClick={() => { if (!window.confirm(`Remove image ${index + 1} from this project? The project must still be saved before managed media cleanup can run.`)) return; setData((previous) => ({ ...previous, gallery: previous.gallery.filter((entry) => entry.id !== item.id), coverImageId: previous.coverImageId === item.id ? previous.gallery.find((entry) => entry.id !== item.id)?.id || '' : previous.coverImageId })); }} className="h-11 w-11 text-red-700 flex items-center justify-center"><Trash2 /></button></div></div>
-              <MediaField label={`Image ${index + 1} URL or upload`} value={item.url} category={data.category} onChange={(url) => updateGallery(item.id, url === item.url ? { url } : { url, ownership: 'external', mediaId: undefined, publicId: undefined })} onUploaded={(asset) => { uploadedMediaIds.current.add(asset.id); updateGallery(item.id, { url: asset.secureUrl, mediaId: asset.id, publicId: asset.publicId, ownership: 'cloudinary-managed' }); }} onBusy={uploadBusy} />
+            {orderedGallery.map((item, index) => {
+              const isCover = (data.coverImageId || orderedGallery[0]?.id) === item.id;
+              return <article key={item.id} className={`rounded-xl border bg-[#f9f9ff] p-3 space-y-3 ${isCover ? 'border-[#5b4cf0] ring-2 ring-[#5b4cf0]/15' : 'border-[#c8c4d8]'}`}>
+              <div className="flex items-center justify-between gap-3"><div><strong>Image {index + 1}</strong>{isCover && <span className="ml-2 rounded-full bg-[#e9edff] px-2 py-0.5 text-[11px] font-semibold text-[#422cd8]">Selected Work-section cover</span>}</div><div className="flex gap-1"><button type="button" aria-label={`Move image ${index + 1} up`} disabled={!index} onClick={() => setData((previous) => { const gallery=[...previous.gallery]; [gallery[index-1],gallery[index]]=[gallery[index],gallery[index-1]]; return {...previous,gallery}; })} className="h-11 w-11 flex items-center justify-center"><ChevronUp /></button><button type="button" aria-label={`Move image ${index + 1} down`} disabled={index === data.gallery.length - 1} onClick={() => setData((previous) => { const gallery=[...previous.gallery]; [gallery[index],gallery[index+1]]=[gallery[index+1],gallery[index]]; return {...previous,gallery}; })} className="h-11 w-11 flex items-center justify-center"><ChevronDown /></button><button type="button" aria-label={`Remove image ${index + 1}`} title={isCover && data.gallery.length > 1 ? 'Select another Work-section cover before removing this image.' : undefined} disabled={data.gallery.length <= 1 || isCover} onClick={() => { if (!window.confirm(`Remove image ${index + 1} from this project? The project must still be saved before managed media cleanup can run.`)) return; setData((previous) => ({ ...previous, gallery: previous.gallery.filter((entry) => entry.id !== item.id) })); }} className="h-11 w-11 text-red-700 flex items-center justify-center disabled:opacity-35"><Trash2 /></button></div></div>
+              {isCover && data.gallery.length > 1 && <p className="text-xs text-[#474555]">Select another Work-section cover before deleting this image.</p>}
+              <MediaField label={`Image ${index + 1} URL or upload`} value={item.url} showPreview={false} onChange={(url) => {
+                if (url === item.url) { updateGallery(item.id, { url }); return; }
+                const display = normalizeGalleryDisplaySettings(item.display);
+                updateGallery(item.id, { url, ownership: 'external', mediaId: undefined, publicId: undefined, display: { ...display, naturalWidth: undefined, naturalHeight: undefined } });
+              }} onUploaded={(asset) => {
+                uploadedMediaIds.current.add(asset.id);
+                const display = normalizeGalleryDisplaySettings(item.display);
+                updateGallery(item.id, { url: asset.secureUrl, mediaId: asset.id, publicId: asset.publicId, ownership: 'cloudinary-managed', display: { ...display, ...(asset.width && asset.height ? { naturalWidth: asset.width, naturalHeight: asset.height } : {}) } });
+              }} onBusy={uploadBusy} />
               <div className="grid sm:grid-cols-2 gap-3"><label className="space-y-1"><span className="font-semibold">Alt text</span><input required maxLength={300} value={item.alt} onChange={(event) => updateGallery(item.id, { alt: event.target.value })} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8] bg-white" /></label><label className="space-y-1"><span className="font-semibold">Caption (optional)</span><input maxLength={500} value={item.caption || ''} onChange={(event) => updateGallery(item.id, { caption: event.target.value })} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8] bg-white" /></label></div>
-              <label className="inline-flex items-center gap-2"><input type="radio" name="cover" checked={data.coverImageId === item.id || (!data.coverImageId && index === 0)} onChange={() => change('coverImageId', item.id)} /> Use as cover image</label>
-            </article>)}
+              <GalleryDisplayEditor item={item} imageNumber={index + 1} category={data.category} onChange={(values) => updateGallery(item.id, values)} />
+              <label className="inline-flex items-center gap-2 font-semibold"><input type="radio" name="cover" checked={isCover} onChange={() => change('coverImageId', item.id)} /> Use as Work-section cover</label>
+            </article>})}
           </section>
 
           <section className="space-y-3 border-t border-[#c8c4d8]/60 pt-4"><h4 className="font-bold text-base">{PROJECT_CATEGORIES[data.category].label} details</h4><div className="grid sm:grid-cols-2 gap-4">{PROJECT_CATEGORIES[data.category].fields.map(categoryField)}</div></section>

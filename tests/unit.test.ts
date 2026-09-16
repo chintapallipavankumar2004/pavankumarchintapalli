@@ -7,7 +7,7 @@ import { validateEnquiry, slugify, httpsUrl, pdfUrl } from '../src/lib/validatio
 import { parseRoute } from '../src/lib/routes';
 import { signUpload } from '../server/signature';
 import { createSignHandler, createEnquiryHandler, createMediaDeleteHandler, type Services } from '../server/handlers';
-import { canonicalCategoryFields, normalizeProject, normalizeProjectCategory, projectCta, projectWriteFields, removedManagedMediaIds, sanitizeCategoryFields, significantRatioDifference } from '../src/lib/projects';
+import { canonicalCategoryFields, galleryAspectRatio, galleryRatioLabel, normalizeGalleryDisplaySettings, normalizeProject, normalizeProjectCategory, projectCta, projectWriteFields, removedManagedMediaIds, sanitizeCategoryFields, significantDisplayRatioDifference, significantRatioDifference } from '../src/lib/projects';
 import type { Request, Response } from '../server/http';
 
 const valid = {
@@ -302,6 +302,7 @@ test('legacy single images migrate idempotently into an ordered cover gallery', 
   assert.equal(first.gallery.length, 1);
   assert.equal(first.gallery[0].url, 'https://example.com/legacy.png');
   assert.equal(first.coverImageId, first.gallery[0].id);
+  assert.deepEqual(first.gallery[0].display, { ratioMode:'original', fit:'contain' });
   assert.deepEqual(second.gallery, first.gallery);
   assert.deepEqual(first.categoryFields.technologies, ['React']);
 });
@@ -341,12 +342,23 @@ test('project writes canonicalize multiline lists and reject unsupported nested 
   assert.deepEqual(fields.categoryFields,canonicalCategoryFields('webapp',project.categoryFields));
   assert.deepEqual(fields.categoryFields.majorFeatures,['Auth','CMS']);
   assert.equal(Object.values(fields.categoryFields).includes(undefined as never),false);
-  assert.deepEqual(fields.gallery[0],{id:'one',url:'https://example.com/app.png',publicId:'',mediaId:'',alt:'Application',order:0,caption:'',ownership:'external'});
+  assert.deepEqual(fields.gallery[0],{id:'one',url:'https://example.com/app.png',publicId:'',mediaId:'',alt:'Application',order:0,caption:'',ownership:'external',display:{ratioMode:'original',fit:'contain'}});
   assert.throws(()=>projectWriteFields({...project,categoryFields:{...project.categoryFields,unexpected:'x'} as any}),/do not belong/);
   assert.throws(()=>projectWriteFields({...project,gallery:[{...project.gallery[0],unexpected:'x'} as any]}),/unsupported fields/);
   assert.throws(()=>projectWriteFields({...project,categoryFields:{...project.categoryFields,majorFeatures:['A',['nested']] as any}}),/one-per-line/);
   assert.throws(()=>projectWriteFields({...project,fullDescription:{unsafe:true} as any}),/fullDescription/);
   assert.throws(()=>projectWriteFields({...project,solution:['Valid',['nested']] as any}),/Solution/);
+});
+
+test('gallery display settings normalize legacy defaults and validate responsive ratios', () => {
+  assert.deepEqual(normalizeGalleryDisplaySettings(undefined), { ratioMode:'original', fit:'contain' });
+  const custom=normalizeProject({id:'ratio',slug:'ratio',title:'Ratio',category:'poster',summary:'Summary',role:'',status:'draft',order:0,lastUpdated:'',categoryFields:{},gallery:[{id:'one',url:'https://example.com/poster.png',alt:'Poster',order:0,ownership:'external',display:{ratioMode:'custom',customRatioWidth:1090,customRatioHeight:1080,fit:'cover',naturalWidth:1600,naturalHeight:2000}}],coverImageId:'one',mediaIds:[],schemaVersion:2});
+  assert.equal(galleryAspectRatio(custom.gallery[0]),1090/1080);
+  assert.equal(galleryRatioLabel(custom.gallery[0]),'1090 / 1080');
+  assert.equal(significantDisplayRatioDifference(custom.gallery[0]),true);
+  assert.deepEqual(projectWriteFields(custom).gallery[0].display,{ratioMode:'custom',customRatioWidth:1090,customRatioHeight:1080,fit:'cover',naturalWidth:1600,naturalHeight:2000});
+  assert.throws(()=>projectWriteFields({...custom,gallery:[{...custom.gallery[0],display:{ratioMode:'custom',customRatioWidth:0,customRatioHeight:1080,fit:'contain'}}]}),/positive numbers/);
+  assert.throws(()=>projectWriteFields({...custom,gallery:[{...custom.gallery[0],display:{ratioMode:'preset',presetRatio:'2:7' as any,fit:'contain'}}]}),/valid display ratio/);
 });
 
 test('public project media contains no fake browser chrome or case-study banner rendering', () => {
