@@ -16,6 +16,7 @@ import { httpsUrl, pdfUrl, slugPattern } from './validation';
 import type { Project, Enquiry, PortfolioSettings, SiteContent, ServiceItem, SkillItem, ProcessItem, CategoryItem, MediaAsset, CleanupJob } from '../types';
 import { defaultContent } from '../data/defaultContent';
 import { normalizeProject, projectWriteFields } from './projects';
+import { saveProjectThroughApi } from './adminApi';
 
 const database = () => {
   if (!db) throw new Error('Firebase is not configured.');
@@ -87,42 +88,17 @@ export async function saveProject(project: Project, creating: boolean) {
   if (!slugPattern.test(project.slug) || project.slug.length > 80 || project.id !== project.slug)
     throw new Error('Use a valid project slug.');
   const fields = projectWriteFields(project);
-  const ref = doc(database(), 'projects', project.id);
-  await runTransaction(database(), async (tx) => {
-    const existing = await tx.get(ref);
-    if (creating && existing.exists())
-      throw new Error('This slug is already used. Choose another.');
-    if (!creating && !existing.exists())
-      throw new Error('This project was deleted. Refresh the catalog.');
-    if (existing.exists()) {
-      tx.set(doc(collection(database(), 'contentRevisions')), {
-        entityType: 'project',
-        entityId: project.id,
-        snapshot: existing.data(),
-        createdAt: serverTimestamp(),
-        createdBy: auth?.currentUser?.uid || '',
-      });
-    }
-    tx.set(ref, {
-      ...fields,
-      createdAt: existing.data()?.createdAt || serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    tx.set(doc(collection(database(), 'auditLogs')), {
-      action: creating ? 'project.create' : 'project.update',
-      entityType: 'project',
-      entityId: project.id,
-      adminUid: auth?.currentUser?.uid || '',
-      summary: creating ? 'Created project record' : 'Updated project record',
-      result: 'success',
-      createdAt: serverTimestamp(),
-    });
-  });
+  await saveProjectThroughApi({ ...project, ...fields }, creating);
 }
 export async function setProjectStatus(project: Project) {
-  await updateDoc(doc(database(), 'projects', project.id), {
-    status: project.status === 'published' ? 'draft' : 'published',
-    updatedAt: serverTimestamp(),
+  const nextStatus = project.status === 'published' ? 'draft' : 'published';
+  await runTransaction(database(), async (tx) => {
+    tx.update(doc(database(), 'projects', project.id), { status: nextStatus, updatedAt: serverTimestamp() });
+    tx.set(doc(collection(database(), 'auditLogs')), {
+      action: nextStatus === 'published' ? 'project.publish' : 'project.unpublish',
+      entityType: 'project', entityId: project.id, adminUid: auth?.currentUser?.uid || '',
+      summary: nextStatus === 'published' ? 'Published project' : 'Unpublished project', result: 'success', createdAt: serverTimestamp(),
+    });
   });
 }
 export async function removeProject(id: string) {
@@ -156,6 +132,10 @@ export async function reorderProject(items: Project[], id: string, direction: -1
     reordered.forEach((p, i) =>
       tx.update(doc(database(), 'projects', p.id), { order: i, updatedAt: serverTimestamp() }),
     );
+    tx.set(doc(collection(database(), 'auditLogs')), {
+      action: 'project.reorder', entityType: 'project', entityId: id,
+      adminUid: auth?.currentUser?.uid || '', summary: 'Reordered project catalog', result: 'success', createdAt: serverTimestamp(),
+    });
   });
 }
 export async function saveSettings(settings: PortfolioSettings) {

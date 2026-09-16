@@ -5,7 +5,7 @@ import type {
   ProjectCategoryFields,
   ProjectGalleryItem,
 } from '../types';
-import { httpsUrl } from './validation';
+import { httpsUrl } from './validation.js';
 
 export interface CategoryFieldDefinition {
   key: keyof ProjectCategoryFields;
@@ -62,11 +62,31 @@ export const PROJECT_CATEGORIES: Record<ProjectCategory, ProjectCategoryDefiniti
 export const categoryFieldKeys = (category: ProjectCategory) =>
   new Set(PROJECT_CATEGORIES[category].fields.map((field) => field.key));
 
+const projectCategories = Object.keys(PROJECT_CATEGORIES) as ProjectCategory[];
+export function normalizeProjectCategory(value: unknown, label?: unknown, tag?: unknown): ProjectCategory {
+  if (typeof value === 'string' && projectCategories.includes(value as ProjectCategory)) return value as ProjectCategory;
+  const hint = `${typeof label === 'string' ? label : ''} ${typeof tag === 'string' ? tag : ''}`.trim().toLowerCase();
+  if (/\bweb applications?\b|\bwebapps?\b/.test(hint)) return 'webapp';
+  if (/\bautomations?\b/.test(hint)) return 'automation';
+  if (/\bposters?\b/.test(hint)) return 'poster';
+  if (/\blogos?\b/.test(hint)) return 'logo';
+  if (/\bapps?\b/.test(hint)) return 'app';
+  return 'website';
+}
+
 export function sanitizeCategoryFields(category: ProjectCategory, input: ProjectCategoryFields) {
   const allowed = categoryFieldKeys(category);
   return Object.fromEntries(
     Object.entries(input).filter(([key, value]) => allowed.has(key as keyof ProjectCategoryFields) && value !== '' && (!Array.isArray(value) || value.length > 0)),
   ) as ProjectCategoryFields;
+}
+
+export function canonicalCategoryFields(category: ProjectCategory, input: ProjectCategoryFields) {
+  const sanitized = sanitizeCategoryFields(category, input);
+  return Object.fromEntries(PROJECT_CATEGORIES[category].fields.map((field) => {
+    const value = sanitized[field.key];
+    return [field.key, field.kind === 'list' ? (Array.isArray(value) ? value : []) : (typeof value === 'string' ? value : '')];
+  })) as ProjectCategoryFields;
 }
 
 function ownership(url: string): MediaOwnership {
@@ -98,7 +118,7 @@ export function normalizeGallery(input: Partial<Project> & Record<string, unknow
 }
 
 export function normalizeProject(entry: Partial<Project> & Record<string, unknown>): Project {
-  const category = (entry.category || 'website') as ProjectCategory;
+  const category = normalizeProjectCategory(entry.category, entry.categoryLabel, entry.tag);
   const gallery = normalizeGallery(entry);
   const legacyFields: ProjectCategoryFields = {
     technologies: Array.isArray(entry.technologies) ? entry.technologies as string[] : [],
@@ -112,7 +132,7 @@ export function normalizeProject(entry: Partial<Project> & Record<string, unknow
   return {
     ...(entry as Project),
     category,
-    categoryLabel: String(entry.categoryLabel || PROJECT_CATEGORIES[category].label),
+    categoryLabel: PROJECT_CATEGORIES[category].label,
     tag: String(entry.tag || PROJECT_CATEGORIES[category].label),
     gallery,
     coverImageId: gallery.some((item) => item.id === requestedCover) ? requestedCover : gallery[0]?.id || '',
@@ -153,7 +173,14 @@ export function significantRatioDifference(width: number, height: number, catego
 }
 
 export function validateProject(project: Project) {
+  const textLimits: Array<[keyof Project, number]> = [['title',120],['summary',600],['categoryLabel',80],['tag',120],['role',200],['client',200],['timeline',200],['deliverables',1000],['fullDescription',10000],['challenge',10000]];
+  for (const [key,max] of textLimits) {
+    const value = project[key];
+    if (value !== undefined && (typeof value !== 'string' || value.length > max)) throw new Error(`${String(key)} is invalid.`);
+  }
   if (!project.title.trim() || !project.summary.trim()) throw new Error('Add a project title and short summary.');
+  if (!Number.isInteger(project.order) || project.order < 0 || !['draft','published'].includes(project.status)) throw new Error('Project order or visibility is invalid.');
+  if (project.solution !== undefined && (!Array.isArray(project.solution) || project.solution.length > 30 || project.solution.some((item) => typeof item !== 'string' || !item.trim() || item.length > 10000))) throw new Error('Solution must contain valid one-per-line text items.');
   if (project.gallery.length < 1 || project.gallery.length > 5) throw new Error('Add between 1 and 5 gallery images.');
   const ids = new Set<string>();
   project.gallery.forEach((item, index) => {
@@ -165,45 +192,64 @@ export function validateProject(project: Project) {
     if (item.order !== index) throw new Error('Gallery display order is invalid.');
     if (!['cloudinary-managed', 'external', 'local-static'].includes(item.ownership)) throw new Error('Gallery asset ownership is invalid.');
     if (item.ownership === 'cloudinary-managed' && (!item.mediaId || !item.publicId)) throw new Error('Managed gallery images must include their media identifiers.');
+    if ((item.mediaId || '').length > 200 || (item.publicId || '').length > 500) throw new Error('Gallery media identifiers are too long.');
   });
   if (!ids.has(project.coverImageId)) throw new Error('Select a gallery cover image.');
   const fields = sanitizeCategoryFields(project.category, project.categoryFields);
-  if (Object.keys(fields).length !== Object.keys(project.categoryFields).filter((key) => project.categoryFields[key as keyof ProjectCategoryFields] !== '').length)
-    throw new Error('Remove fields that do not belong to the selected category.');
   for (const key of ['liveUrl', 'demoUrl'] as const) {
     const value = fields[key];
     if (typeof value === 'string' && value && !httpsUrl(value)) throw new Error('External project links must use HTTPS.');
+  }
+  for (const definition of PROJECT_CATEGORIES[project.category].fields) {
+    const value = fields[definition.key];
+    if (value === undefined) continue;
+    if (definition.kind === 'list') {
+      if (!Array.isArray(value) || value.length > (definition.max || 30) || value.some((item) => typeof item !== 'string' || !item.trim() || item.length > 500)) throw new Error(`${definition.label} must contain valid one-per-line text items.`);
+    } else if (typeof value !== 'string' || value.length > (definition.kind === 'textarea' ? 2000 : definition.kind === 'url' ? 2048 : 500)) {
+      throw new Error(`${definition.label} is invalid.`);
+    }
   }
 }
 
 export function projectWriteFields(project: Project) {
   if (!Array.isArray(project.gallery) || project.gallery.length < 1 || project.gallery.length > 5) throw new Error('Add between 1 and 5 gallery images.');
+  const allowedProjectKeys = new Set(['id','slug','order','title','category','categoryLabel','tag','summary','fullDescription','categoryFields','gallery','coverImageId','schemaVersion','mediaIds','technologies','liveUrl','role','client','timeline','deliverables','status','image','thumbnail','bannerImage','lastUpdated','challenge','solution','createdAt','updatedAt']);
+  if (Object.keys(project).some((key) => !allowedProjectKeys.has(key))) throw new Error('The project contains unsupported fields.');
+  const allowedGalleryKeys = new Set(['id','url','publicId','mediaId','alt','order','caption','ownership']);
+  if (project.gallery.some((item) => Object.keys(item).some((key) => !allowedGalleryKeys.has(key)))) throw new Error('A gallery image contains unsupported fields.');
+  const allowedCategoryKeys = categoryFieldKeys(normalizeProjectCategory(project.category, project.categoryLabel, project.tag));
+  if (Object.keys(project.categoryFields || {}).some((key) => !allowedCategoryKeys.has(key as keyof ProjectCategoryFields))) throw new Error('Remove fields that do not belong to the selected category.');
   const normalized = normalizeProject(project as Project & Record<string, unknown>);
   validateProject(normalized);
-  const {
-    id: _id,
-    lastUpdated: _lastUpdated,
-    image: _legacyImage,
-    thumbnail: _legacyThumbnail,
-    bannerImage: _legacyBanner,
-    technologies: _legacyTechnologies,
-    liveUrl: _legacyLiveUrl,
-    ...fields
-  } = normalized;
-  return Object.fromEntries(Object.entries({
-    ...fields,
-    gallery: fields.gallery.map((item, order) => ({
+  return {
+    slug: normalized.slug,
+    order: normalized.order,
+    title: normalized.title,
+    category: normalized.category,
+    categoryLabel: normalized.categoryLabel,
+    tag: normalized.tag,
+    summary: normalized.summary,
+    fullDescription: normalized.fullDescription || '',
+    role: normalized.role || '',
+    client: normalized.client || '',
+    timeline: normalized.timeline || '',
+    deliverables: normalized.deliverables || '',
+    status: normalized.status,
+    challenge: normalized.challenge || '',
+    solution: normalized.solution || [],
+    gallery: normalized.gallery.map((item, order) => ({
       id: item.id,
       url: item.url,
-      ...(item.publicId ? { publicId: item.publicId } : {}),
-      ...(item.mediaId ? { mediaId: item.mediaId } : {}),
+      publicId: item.publicId || '',
+      mediaId: item.mediaId || '',
       alt: item.alt.trim(),
       order,
-      ...(item.caption?.trim() ? { caption: item.caption.trim() } : {}),
+      caption: item.caption?.trim() || '',
       ownership: item.ownership,
     })),
-    categoryFields: sanitizeCategoryFields(fields.category, fields.categoryFields),
-    mediaIds: fields.gallery.flatMap((item) => item.mediaId ? [item.mediaId] : []),
+    categoryFields: canonicalCategoryFields(normalized.category, normalized.categoryFields),
+    mediaIds: normalized.gallery.flatMap((item) => item.mediaId ? [item.mediaId] : []),
     schemaVersion: 2 as const,
-  }).filter(([, value]) => value !== undefined));
+    coverImageId: normalized.coverImageId,
+  };
 }

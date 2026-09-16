@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { projectWriteFields } from '../../src/lib/projects';
 let env: RulesTestEnvironment;
 test.beforeAll(async () => {
   env = await initializeTestEnvironment({
@@ -76,6 +77,21 @@ test.afterEach(async ({ page }) => {
 });
 test.beforeEach(async ({ context }) => {
   // These are local integration tests; do not depend on external image/font CDNs.
+  await context.route('**/api/projects/save', async (route) => {
+    const body = route.request().postDataJSON() as { project: any; creating: boolean };
+    try {
+      const fields = projectWriteFields(body.project);
+      await env.withSecurityRulesDisabled(async (admin) => {
+        const database = admin.firestore();
+        const ref = doc(database,'projects',body.project.id);
+        const before = await getDoc(ref);
+        await setDoc(ref,{...fields,createdAt:before.data()?.createdAt || serverTimestamp(),updatedAt:serverTimestamp()});
+      });
+      await route.fulfill({status:body.creating?201:200,contentType:'application/json',body:JSON.stringify({saved:true,id:body.project.id})});
+    } catch (error) {
+      await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:error instanceof Error?error.message:'Invalid project',stage:'validation'})});
+    }
+  });
   await context.route(/^https:\/\//, (route) => route.abort());
 });
 test('public routes exclude drafts, survive refresh and browser history, and preserve responsive layout', async ({
@@ -164,6 +180,12 @@ test('authorized admin can edit, publish, reorder and delete; another browser se
   await expect(page.getByLabel(/new enquiries/)).toHaveCount(0);
   await page.setViewportSize({width:1366,height:900});
   await page.getByRole('button',{name:'Projects',exact:true}).click();
+  const logo = page.getByRole('row').filter({ hasText: 'Logo Test Project' });
+  await logo.getByRole('button',{name:'Edit Project',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Logos details'})).toBeVisible();
+  await expect(page.getByLabel('Design tools')).toBeVisible();
+  await expect(page.getByLabel('Live website URL')).toHaveCount(0);
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
   const draft = page.getByRole('row').filter({ hasText: 'Private Draft Project' });
   await draft.getByRole('button', { name: 'Publish', exact: true }).click();
   await expect(draft.getByRole('button', { name: 'Unpublish' })).toBeVisible();
@@ -183,9 +205,23 @@ test('authorized admin can edit, publish, reorder and delete; another browser se
   expect(warning.message()).toContain('clears fields that do not apply');
   await warning.accept();
   await categoryChange;
+  await expect(page.getByRole('heading',{name:'Logos details'})).toBeVisible();
   await expect(page.getByLabel('Design tools')).toBeVisible();
   await expect(page.getByLabel('Live website URL')).toHaveCount(0);
+  await page.getByLabel('Category').selectOption('poster');
+  await expect(page.getByRole('heading',{name:'Posters details'})).toBeVisible();
+  await expect(page.getByLabel('Poster type')).toBeVisible();
+  await page.getByLabel('Category').selectOption('automation');
+  await expect(page.getByRole('heading',{name:'Automations details'})).toBeVisible();
+  await expect(page.getByLabel('Tools / platforms')).toBeVisible();
+  await page.getByLabel('Category').selectOption('app');
+  await expect(page.getByRole('heading',{name:'Apps details'})).toBeVisible();
+  await expect(page.getByLabel('Platform')).toBeVisible();
+  await page.getByLabel('Category').selectOption('webapp');
+  await expect(page.getByRole('heading',{name:'Web Applications details'})).toBeVisible();
+  await expect(page.getByLabel('User roles')).toBeVisible();
   await page.getByLabel('Category').selectOption('website');
+  await expect(page.getByRole('heading',{name:'Websites details'})).toBeVisible();
   await page.getByLabel('Project title', { exact: true }).fill('New Portfolio Project');
   await page.getByLabel('Short summary', { exact: true }).fill('A newly created portfolio entry.');
   await page.getByLabel('Image 1 URL or upload', { exact: true }).fill('https://example.com/new.png');

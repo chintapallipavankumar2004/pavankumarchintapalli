@@ -30,8 +30,8 @@ export function postOnly(req: Request, res: Response) {
     .filter(Boolean);
   if (!origin || !allowed.includes(origin)) throw new HttpError(403, 'Origin not allowed.');
 }
-export function bodyObject(req: Request) {
-  if (Number(req.headers['content-length'] || 0) > 16000)
+export function bodyObject(req: Request, maxBytes = 16000) {
+  if (Number(req.headers['content-length'] || 0) > maxBytes)
     throw new HttpError(413, 'Request too large.');
   let body = req.body;
   if (typeof body === 'string') {
@@ -45,7 +45,7 @@ export function bodyObject(req: Request) {
     !body ||
     typeof body !== 'object' ||
     Array.isArray(body) ||
-    Buffer.byteLength(JSON.stringify(body)) > 16000
+    Buffer.byteLength(JSON.stringify(body)) > maxBytes
   )
     throw new HttpError(400, 'Invalid request.');
   return body as Record<string, unknown>;

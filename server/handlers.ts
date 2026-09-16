@@ -12,6 +12,8 @@ import {
 } from './http.js';
 import { signUpload } from './signature.js';
 import { validateEnquiry } from '../src/lib/validation.js';
+import { projectWriteFields } from '../src/lib/projects.js';
+import type { Project } from '../src/types.js';
 
 export type Services = ReturnType<typeof adminServices>;
 async function requireAdmin(req: Request, services: Services) {
@@ -102,6 +104,46 @@ export function createMediaDeleteHandler(services = adminServices) {
       await db.runTransaction(async tx=>{tx.delete(ref);tx.delete(jobRef);tx.set(db.collection('auditLogs').doc(),{action:'media.delete',entityType:'media',entityId:b.mediaId,adminUid:uid,summary:'Deleted managed media',result:'success',createdAt:FieldValue.serverTimestamp()});});
       json(res,200,{deleted:true});
     } catch(error){respondError(res,error);}
+  };
+}
+
+export function createProjectSaveHandler(services = adminServices) {
+  return async (req: Request, res: Response) => {
+    let stage = 'request';
+    try {
+      postOnly(req, res);
+      stage = 'authorization';
+      const { uid, db } = await requireAdmin(req, services());
+      const body = bodyObject(req, 65536);
+      if (Object.keys(body).some((key) => !['project', 'creating'].includes(key)) || typeof body.creating !== 'boolean' || !body.project || typeof body.project !== 'object' || Array.isArray(body.project)) throw new HttpError(400, 'Invalid project save request.');
+      const project = body.project as Project;
+      if (typeof project.id !== 'string' || typeof project.slug !== 'string' || project.id !== project.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(project.slug) || project.slug.length > 80 || !['website','webapp','poster','logo','automation','app'].includes(project.category)) throw new HttpError(400, 'Use a valid project slug and category.');
+      stage = 'validation';
+      let fields: ReturnType<typeof projectWriteFields>;
+      try { fields = projectWriteFields(project); }
+      catch (error) { throw new HttpError(400, error instanceof Error ? error.message : 'Check the project fields.'); }
+      stage = 'project-transaction';
+      const ref = db.doc(`projects/${project.id}`);
+      await db.runTransaction(async (tx) => {
+        const existing = await tx.get(ref);
+        if (body.creating && existing.exists) throw new HttpError(409, 'This slug is already used. Choose another.');
+        if (!body.creating && !existing.exists) throw new HttpError(409, 'This project was deleted. Refresh the catalog.');
+        for (const item of fields.gallery) {
+          if (item.ownership !== 'cloudinary-managed') continue;
+          const media = await tx.get(db.doc(`media/${item.mediaId}`));
+          const value = media.data();
+          if (!media.exists || value?.status !== 'active' || value?.ownership !== 'cloudinary-managed' || value?.publicId !== item.publicId || value?.secureUrl !== item.url) throw new HttpError(400, 'A managed gallery image is missing or no longer valid. Upload it again.');
+        }
+        if (existing.exists) tx.set(db.collection('contentRevisions').doc(), { entityType: 'project', entityId: project.id, snapshot: existing.data(), createdAt: FieldValue.serverTimestamp(), createdBy: uid });
+        tx.set(ref, { ...fields, createdAt: existing.data()?.createdAt || FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+        tx.set(db.collection('auditLogs').doc(), { action: body.creating ? 'project.create' : 'project.update', entityType: 'project', entityId: project.id, adminUid: uid, summary: body.creating ? 'Created project record' : 'Updated project record', result: 'success', createdAt: FieldValue.serverTimestamp() });
+      });
+      json(res, body.creating ? 201 : 200, { saved: true, id: project.id });
+    } catch (error) {
+      if (!(error instanceof HttpError)) console.error(`Portfolio project save failed at ${stage}.`);
+      if (error instanceof HttpError) return json(res, error.status, { error: error.message, stage });
+      return json(res, 503, { error: 'The project could not be saved. Please try again.', stage });
+    }
   };
 }
 

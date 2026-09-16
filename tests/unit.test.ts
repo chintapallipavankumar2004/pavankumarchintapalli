@@ -7,7 +7,7 @@ import { validateEnquiry, slugify, httpsUrl, pdfUrl } from '../src/lib/validatio
 import { parseRoute } from '../src/lib/routes';
 import { signUpload } from '../server/signature';
 import { createSignHandler, createEnquiryHandler, createMediaDeleteHandler, type Services } from '../server/handlers';
-import { normalizeProject, projectCta, projectWriteFields, removedManagedMediaIds, sanitizeCategoryFields, significantRatioDifference } from '../src/lib/projects';
+import { canonicalCategoryFields, normalizeProject, normalizeProjectCategory, projectCta, projectWriteFields, removedManagedMediaIds, sanitizeCategoryFields, significantRatioDifference } from '../src/lib/projects';
 import type { Request, Response } from '../server/http';
 
 const valid = {
@@ -322,6 +322,31 @@ test('category configuration clears incompatible data and exposes only valid con
   assert.deepEqual(projectCta(site),{label:'Visit Website',url:'https://example.com'});
   assert.equal(significantRatioDifference(1600,900,'website'),false);
   assert.equal(significantRatioDifference(900,1600,'website'),true);
+});
+
+test('category normalization keeps labels and edit forms aligned for legacy records', () => {
+  assert.equal(normalizeProjectCategory(undefined,'Logos'), 'logo');
+  assert.equal(normalizeProjectCategory('website','Logos'), 'website');
+  const legacyLogo=normalizeProject({id:'legacy-logo',slug:'legacy-logo',title:'Legacy logo',categoryLabel:'Logos',summary:'Summary',role:'',status:'draft',order:0,lastUpdated:'',gallery:[{id:'one',url:'https://example.com/logo.png',alt:'Logo',order:0,ownership:'external'}],coverImageId:'one',mediaIds:[],schemaVersion:2});
+  assert.equal(legacyLogo.category,'logo');
+  assert.equal(legacyLogo.categoryLabel,'Logos');
+  const mislabeled=normalizeProject({...legacyLogo,category:'website',categoryLabel:'Logos'});
+  assert.equal(mislabeled.category,'website');
+  assert.equal(mislabeled.categoryLabel,'Websites');
+});
+
+test('project writes canonicalize multiline lists and reject unsupported nested fields', () => {
+  const project=normalizeProject({id:'canonical',slug:'canonical',title:'Canonical',category:'webapp',summary:'Summary',role:'',status:'draft',order:0,lastUpdated:'',categoryFields:{technologies:['React','Firebase'],majorFeatures:['Auth','CMS'],userRoles:['Admin']},gallery:[{id:'one',url:'https://example.com/app.png',alt:'Application',order:0,ownership:'external'}],coverImageId:'one',mediaIds:[],schemaVersion:2});
+  const fields=projectWriteFields(project);
+  assert.deepEqual(fields.categoryFields,canonicalCategoryFields('webapp',project.categoryFields));
+  assert.deepEqual(fields.categoryFields.majorFeatures,['Auth','CMS']);
+  assert.equal(Object.values(fields.categoryFields).includes(undefined as never),false);
+  assert.deepEqual(fields.gallery[0],{id:'one',url:'https://example.com/app.png',publicId:'',mediaId:'',alt:'Application',order:0,caption:'',ownership:'external'});
+  assert.throws(()=>projectWriteFields({...project,categoryFields:{...project.categoryFields,unexpected:'x'} as any}),/do not belong/);
+  assert.throws(()=>projectWriteFields({...project,gallery:[{...project.gallery[0],unexpected:'x'} as any]}),/unsupported fields/);
+  assert.throws(()=>projectWriteFields({...project,categoryFields:{...project.categoryFields,majorFeatures:['A',['nested']] as any}}),/one-per-line/);
+  assert.throws(()=>projectWriteFields({...project,fullDescription:{unsafe:true} as any}),/fullDescription/);
+  assert.throws(()=>projectWriteFields({...project,solution:['Valid',['nested']] as any}),/Solution/);
 });
 
 test('public project media contains no fake browser chrome or case-study banner rendering', () => {
