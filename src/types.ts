@@ -1,6 +1,6 @@
 export type ViewMode = 'public' | 'project-detail' | 'admin-login' | 'admin-dashboard';
 
-export type ProjectCategory = 'website' | 'webapp' | 'poster' | 'logo' | 'automation' | 'app';
+export type ProjectCategory = string;
 export type MediaOwnership = 'cloudinary-managed' | 'external' | 'local-static';
 export type GalleryRatioMode = 'original' | 'preset' | 'custom';
 export type GalleryPresetRatio = '1:1' | '4:5' | '4:3' | '3:2' | '16:9' | '9:16';
@@ -29,33 +29,27 @@ export interface ProjectGalleryItem {
   display?: GalleryDisplaySettings;
 }
 
-export type ProjectCategoryFields = Partial<Record<
-  | 'technologies'
-  | 'liveUrl'
-  | 'majorFeatures'
-  | 'responsiveSupport'
-  | 'hostingPlatform'
-  | 'userRoles'
-  | 'backendDatabase'
-  | 'authentication'
-  | 'platform'
-  | 'appStatus'
-  | 'designTools'
-  | 'brandIndustry'
-  | 'designStyle'
-  | 'colourPalette'
-  | 'brandBrief'
-  | 'posterType'
-  | 'targetAudience'
-  | 'campaignName'
-  | 'toolsPlatforms'
-  | 'integrations'
-  | 'trigger'
-  | 'automatedWorkflow'
-  | 'businessOutcome'
-  | 'demoUrl',
-  string | string[]
->>;
+export type ProjectCategoryFields = Record<string, string | string[]>;
+export type ProjectCategoryFieldType = 'text' | 'textarea' | 'url' | 'list' | 'select' | 'multiselect';
+export interface ProjectCategoryFieldDefinition {
+  key: string;
+  label: string;
+  type: ProjectCategoryFieldType;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+export interface ProjectCategoryMediaConfig {
+  defaultRatio: 'original' | GalleryPresetRatio;
+  recommendedWidth?: number;
+  recommendedHeight?: number;
+  guidance: string;
+  defaultFit: GalleryFit;
+}
+export interface ProjectCategoryCta {
+  label: string;
+  urlField: string;
+}
 
 export interface Project {
   id: string;
@@ -113,7 +107,23 @@ export interface ServiceItem {
 
 export interface SkillItem { id: string; name: string; group: string; iconName?: string; order: number; published: boolean }
 export interface ProcessItem { id: string; title: string; description: string; order: number; published: boolean }
-export interface CategoryItem { id: string; name: string; slug: string; description?: string; iconName?: string; order: number; published: boolean; mediaLayout: 'cover' | 'gallery' | 'logo'; accent: 'indigo' | 'emerald' | 'amber' | 'rose' }
+export interface CategoryItem {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  order: number;
+  published: boolean;
+  enabled: boolean;
+  mediaConfig: ProjectCategoryMediaConfig;
+  fields: ProjectCategoryFieldDefinition[];
+  cta?: ProjectCategoryCta;
+  schemaVersion?: 2;
+  /** Legacy presentation fields retained while older category documents are normalized. */
+  iconName?: string;
+  mediaLayout?: 'cover' | 'gallery' | 'logo';
+  accent?: 'indigo' | 'emerald' | 'amber' | 'rose';
+}
 export interface MediaAsset { id: string; assetId?: string; publicId?: string; resourceType: 'image' | 'raw' | 'video'; deliveryType: string; format: string; version?: number; secureUrl: string; bytes?: number; width?: number; height?: number; originalFilename?: string; folder?: string; ownership: MediaOwnership; status: 'active' | 'deleting' | 'failed'; createdAt?: string; createdBy?: string }
 export interface CleanupJob { id: string; kind: 'media-delete'; mediaId: string; publicId?: string; resourceType?: string; status: 'failed' | 'pending'; attempts: number; updatedAt?: unknown }
 export interface SiteContent {

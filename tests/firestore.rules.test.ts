@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { createEnquiryHandler, createProjectSaveHandler, type Services } from '../server/handlers';
+import { createCategoryManageHandler, createEnquiryHandler, createProjectReorderHandler, createProjectSaveHandler, type Services } from '../server/handlers';
+import { DEFAULT_PROJECT_CATEGORIES } from '../src/lib/categories';
 import type { Request, Response } from '../server/http';
 import {
   initializeTestEnvironment,
@@ -119,6 +120,8 @@ beforeEach(async () => {
       createdAt: Timestamp.now(),
     });
     await setDoc(doc(db, 'services/website'), { published: true });
+    await setDoc(doc(db, 'categories/website'), { ...DEFAULT_PROJECT_CATEGORIES.website, updatedAt:Timestamp.now() });
+    await setDoc(doc(db, 'categories/private-category'), { ...DEFAULT_PROJECT_CATEGORIES.website, id:'private-category', slug:'private-category', name:'Private category', published:false, updatedAt:Timestamp.now() });
     await setDoc(doc(db, 'settings/public'), {
       headshot: 'https://example.com/photo.png',
       resumeUrl: '',
@@ -169,7 +172,7 @@ for (const identity of ['anonymous', 'other']) {
     await assertFails(getDoc(doc(db, 'enquiryLimits/anything')));
   });
 }
-test('admin can publish, unpublish, reorder and delete while full saves stay backend-only', async () => {
+test('admin can publish, unpublish and delete while full saves and reorder stay backend-only', async () => {
   const db = env.authenticatedContext('owner').firestore();
   await assertSucceeds(getDocs(collection(db, 'projects')));
   await assertFails(setDoc(doc(db, 'projects/new'), project('new')));
@@ -182,8 +185,39 @@ test('admin can publish, unpublish, reorder and delete while full saves stay bac
   const batch = writeBatch(db);
   batch.update(doc(db, 'projects/draft'), { order: 1, updatedAt: serverTimestamp() });
   batch.update(doc(db, 'projects/live'), { order: 0, updatedAt: serverTimestamp() });
-  await assertSucceeds(batch.commit());
+  await assertFails(batch.commit());
   await assertSucceeds(deleteDoc(doc(db, 'projects/draft')));
+});
+test('category reads respect publication and every direct category mutation is denied', async () => {
+  const publicDb=env.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(publicDb,'categories/website')));
+  await assertFails(getDoc(doc(publicDb,'categories/private-category')));
+  const adminDb=env.authenticatedContext('owner').firestore();
+  await assertSucceeds(getDocs(collection(adminDb,'categories')));
+  await assertFails(setDoc(doc(adminDb,'categories/thumbnail'),{...DEFAULT_PROJECT_CATEGORIES.website,id:'thumbnail',slug:'thumbnail',name:'Thumbnail'}));
+  await assertFails(updateDoc(doc(adminDb,'categories/website'),{order:2,updatedAt:serverTimestamp()}));
+  await assertFails(deleteDoc(doc(adminDb,'categories/website')));
+});
+
+test('legacy direct reorder fails atomically when any rewritten project lacks valid status', async () => {
+  const current=readFileSync('firestore.rules','utf8');
+  const legacyRules=current
+    .replace("hasOnly(['status','updatedAt'])","hasOnly(['status','order','updatedAt'])")
+    .replace("&& request.resource.data.status in ['draft','published']\n        && request.resource.data.updatedAt", "&& request.resource.data.status in ['draft','published']\n        && request.resource.data.order is int && request.resource.data.order >= 0\n        && request.resource.data.updatedAt");
+  const legacy=await initializeTestEnvironment({projectId:'demo-portfolio-legacy-reorder',firestore:{host:'127.0.0.1',port:8080,rules:legacyRules}});
+  try{
+    await legacy.withSecurityRulesDisabled(async(context)=>{
+      const db=context.firestore();
+      await setDoc(doc(db,'access/admin'),{uid:'owner'});
+      await setDoc(doc(db,'projects/valid'),project('valid','draft'));
+      await setDoc(doc(db,'projects/legacy'),{slug:'legacy',title:'Legacy',order:1,updatedAt:Timestamp.now()});
+    });
+    const db=legacy.authenticatedContext('owner').firestore();
+    const batch=writeBatch(db);
+    batch.update(doc(db,'projects/valid'),{order:1,updatedAt:serverTimestamp()});
+    batch.update(doc(db,'projects/legacy'),{order:0,updatedAt:serverTimestamp()});
+    await assertFails(batch.commit());
+  }finally{await legacy.cleanup();}
 });
 test('direct project creates are denied even to admins', async () => {
   const db=env.authenticatedContext('owner').firestore();
@@ -320,6 +354,100 @@ test('project save API supports gallery edits, duplication and authorization fai
   } finally {
     await deleteApp(app);
   }
+});
+
+test('protected category API supports dynamic thumbnail CRUD, state changes, reorder and guarded deletion', async () => {
+  const app=initializeApp({projectId:'demo-portfolio'},'category-api-integration-test');
+  try{
+    const db=getFirestore(app);
+    process.env.ALLOWED_ORIGINS='http://localhost:3000';
+    const services=(uid='owner',validCheck=true)=>()=>({
+      db,
+      auth:{verifyIdToken:async()=>({uid}),getUser:async()=>({customClaims:{}})},
+      appCheck:{verifyToken:async()=>{if(!validCheck)throw new Error('invalid');return{};}},
+    }) as unknown as Services;
+    const handler=createCategoryManageHandler(services());
+    const thumbnail={
+      id:'thumbnail',name:'Thumbnails',slug:'thumbnail',description:'Video and social thumbnails.',order:9,published:false,enabled:true,
+      mediaConfig:{defaultRatio:'16:9' as const,recommendedWidth:1280,recommendedHeight:720,guidance:'Recommended 1280 x 720 px',defaultFit:'contain' as const},
+      fields:[{key:'designTools',label:'Design tools',type:'list' as const,required:false},{key:'channelUrl',label:'Channel URL',type:'url' as const,required:false}],
+      cta:{label:'View channel',urlField:'channelUrl'},schemaVersion:2 as const,
+    };
+    assert.equal((await invokeProject(handler,{action:'save',category:thumbnail,creating:true})).status,201);
+    assert.equal((await invokeProject(handler,{action:'save',category:thumbnail,creating:true})).status,409);
+    assert.equal((await invokeProject(handler,{action:'save',category:{...thumbnail,name:'Thumbnail Designs'},creating:false})).status,200);
+    assert.equal((await invokeProject(handler,{action:'publish',id:'thumbnail'})).status,200);
+    assert.equal((await invokeProject(handler,{action:'unpublish',id:'thumbnail'})).status,200);
+    assert.equal((await invokeProject(handler,{action:'publish',id:'thumbnail'})).status,200);
+    assert.equal((await invokeProject(handler,{action:'disable',id:'thumbnail'})).status,200);
+    assert.equal((await invokeProject(handler,{action:'enable',id:'thumbnail'})).status,200);
+    assert.equal((await invokeProject(handler,{action:'reorder',id:'thumbnail',direction:-1})).status,200);
+    const saved=(await db.doc('categories/thumbnail').get()).data();
+    assert.equal(saved?.published,true);
+    assert.equal(saved?.enabled,true);
+    assert.equal(saved?.schemaVersion,2);
+    assert.equal(saved?.name,'Thumbnail Designs');
+    assert.equal((await invokeProject(handler,{action:'save',category:{...thumbnail,id:'Bad ID',slug:'Bad ID'},creating:true})).status,400);
+    assert.equal((await invokeProject(handler,{action:'save',category:{...thumbnail,id:'malformed',slug:'malformed',fields:[{key:'bad-key',label:'Bad',type:'select',required:false,options:[]}]},creating:true})).status,400);
+    assert.equal((await invokeProject(createCategoryManageHandler(services('other')),{action:'save',category:{...thumbnail,id:'outsider-category',slug:'outsider-category'},creating:true})).status,403);
+    assert.equal((await invokeProject(createCategoryManageHandler(services('other')),{action:'publish',id:'thumbnail'})).status,403);
+    assert.equal((await invokeProject(createCategoryManageHandler(services('other')),{action:'delete',id:'thumbnail'})).status,403);
+    assert.equal((await invokeProject(createCategoryManageHandler(services('owner',false)),{action:'publish',id:'thumbnail'})).status,403);
+    assert.equal((await invokeProject(handler,{action:'publish',id:'thumbnail'},{authorization:''})).status,401);
+    assert.equal((await invokeProject(handler,{action:'save',category:thumbnail,creating:false},{authorization:''})).status,401);
+
+    const social={...thumbnail,id:'social-media-design',slug:'social-media-design',name:'Social Media Designs',order:10,fields:[{key:'platform',label:'Platform',type:'select' as const,required:true,options:['Instagram','Facebook','Other']}],cta:undefined};
+    assert.equal((await invokeProject(handler,{action:'save',category:social,creating:true})).status,201);
+    assert.equal((await invokeProject(handler,{action:'delete',id:'social-media-design'})).status,200);
+
+    const item=managedGallery(1)[0];
+    await db.doc(`media/${item.mediaId}`).set({assetId:item.mediaId,publicId:item.publicId,secureUrl:item.url,ownership:'cloudinary-managed',status:'active'});
+    const dynamic={...completeProjectV2('thumbnail-project',1),category:'thumbnail',categoryLabel:'Thumbnails',tag:'Thumbnails',categoryFields:{designTools:['Canva'],channelUrl:'https://example.com/channel'}};
+    assert.equal((await invokeProject(createProjectSaveHandler(services()),{project:dynamic,creating:true})).status,201);
+    assert.equal((await invokeProject(handler,{action:'delete',id:'thumbnail'})).status,409);
+    await db.doc('projects/thumbnail-project').delete();
+    assert.equal((await invokeProject(handler,{action:'delete',id:'thumbnail'})).status,200);
+    assert.equal((await db.doc('categories/thumbnail').get()).exists,false);
+    assert.ok((await db.collection('auditLogs').where('entityType','==','category').get()).size>=6);
+  }finally{await deleteApp(app);}
+});
+
+test('protected project reorder normalizes duplicate and missing orders, including legacy records', async () => {
+  const app=initializeApp({projectId:'demo-portfolio'},'project-reorder-integration-test');
+  try{
+    const db=getFirestore(app);
+    process.env.ALLOWED_ORIGINS='http://localhost:3000';
+    const existing=await db.collection('projects').get();
+    await Promise.all(existing.docs.map((entry)=>entry.ref.delete()));
+    await db.doc('projects/coffee-hub').set({title:'Coffee HUB',status:'published',order:0});
+    await db.doc('projects/krishnas-kitchen').set({title:"Krishna's Kitchen",status:'published',order:1});
+    await db.doc('projects/legacy-no-status').set({title:'Legacy without status',order:1});
+    await db.doc('projects/ab-collection').set({title:'AB Collection by Aadya E - Commerce Website',status:'published'});
+    const services=(uid='owner',validCheck=true)=>()=>({
+      db,
+      auth:{verifyIdToken:async()=>({uid}),getUser:async()=>({customClaims:{}})},
+      appCheck:{verifyToken:async()=>{if(!validCheck)throw new Error('invalid');return{};}},
+    }) as unknown as Services;
+    const handler=createProjectReorderHandler(services());
+    assert.deepEqual((await Promise.all([invokeProject(handler,{id:'ab-collection',direction:-1}),invokeProject(handler,{id:'ab-collection',direction:-1})])).map((result)=>result.status),[200,200]);
+    assert.equal((await invokeProject(handler,{id:'ab-collection',direction:-1})).status,200);
+    let ordered=(await db.collection('projects').orderBy('order').get()).docs.map((entry)=>({id:entry.id,order:entry.data().order}));
+    assert.equal(ordered[0].id,'ab-collection');
+    assert.deepEqual(ordered.map((entry)=>entry.order),ordered.map((_,index)=>index));
+    assert.equal(new Set(ordered.map((entry)=>entry.order)).size,ordered.length);
+    const before=ordered.map((entry)=>entry.id);
+    assert.equal((await invokeProject(handler,{id:'ab-collection',direction:-1})).status,200);
+    assert.deepEqual((await db.collection('projects').orderBy('order').get()).docs.map((entry)=>entry.id),before);
+    assert.equal((await invokeProject(handler,{id:'krishnas-kitchen',direction:1})).status,200);
+    ordered=(await db.collection('projects').orderBy('order').get()).docs.map((entry)=>({id:entry.id,order:entry.data().order}));
+    const last=ordered.at(-1)!.id;
+    assert.equal((await invokeProject(handler,{id:last,direction:1})).status,200);
+    assert.equal((await db.doc(`projects/${last}`).get()).data()?.order,ordered.length-1);
+    assert.equal((await invokeProject(createProjectReorderHandler(services('other')),{id:'coffee-hub',direction:1})).status,403);
+    assert.equal((await invokeProject(createProjectReorderHandler(services('owner',false)),{id:'coffee-hub',direction:1})).status,403);
+    assert.equal((await invokeProject(handler,{id:'coffee-hub',direction:1},{authorization:''})).status,401);
+    assert.equal((await invokeProject(handler,{id:'coffee-hub',direction:0})).status,400);
+  }finally{await deleteApp(app);}
 });
 
 test('real enquiry transactions persist once under concurrent retries and remain private', async () => {

@@ -16,7 +16,8 @@ import { httpsUrl, pdfUrl, slugPattern } from './validation';
 import type { Project, Enquiry, PortfolioSettings, SiteContent, ServiceItem, SkillItem, ProcessItem, CategoryItem, MediaAsset, CleanupJob } from '../types';
 import { defaultContent } from '../data/defaultContent';
 import { normalizeProject, projectWriteFields } from './projects';
-import { saveProjectThroughApi } from './adminApi';
+import { fallbackCategories, normalizeCategory } from './categories';
+import { manageCategoryThroughApi, reorderProjectThroughApi, saveProjectThroughApi } from './adminApi';
 
 const database = () => {
   if (!db) throw new Error('Firebase is not configured.');
@@ -84,10 +85,10 @@ export function watchSettings(
     fail,
   );
 }
-export async function saveProject(project: Project, creating: boolean) {
+export async function saveProject(project: Project, creating: boolean, category?: CategoryItem) {
   if (!slugPattern.test(project.slug) || project.slug.length > 80 || project.id !== project.slug)
     throw new Error('Use a valid project slug.');
-  const fields = projectWriteFields(project);
+  const fields = projectWriteFields(project, category);
   await saveProjectThroughApi({ ...project, ...fields }, creating);
 }
 export async function setProjectStatus(project: Project) {
@@ -114,29 +115,7 @@ export async function reorderProject(items: Project[], id: string, direction: -1
   const index = items.findIndex((p) => p.id === id);
   const other = items[index + direction];
   if (index < 0 || !other) return;
-  // Reindex atomically so ties in imported data do not prevent movement.
-  if (items.length > 400) throw new Error('Catalog is too large for this reorder operation.');
-  const reordered = [...items];
-  [reordered[index], reordered[index + direction]] = [
-    reordered[index + direction],
-    reordered[index],
-  ];
-  await runTransaction(database(), async (tx) => {
-    const snapshots = await Promise.all(
-      items.map((p) => tx.get(doc(database(), 'projects', p.id))),
-    );
-    snapshots.forEach((snapshot, i) => {
-      if (!snapshot.exists() || snapshot.data().order !== items[i].order)
-        throw new Error('The catalog changed. Try again.');
-    });
-    reordered.forEach((p, i) =>
-      tx.update(doc(database(), 'projects', p.id), { order: i, updatedAt: serverTimestamp() }),
-    );
-    tx.set(doc(collection(database(), 'auditLogs')), {
-      action: 'project.reorder', entityType: 'project', entityId: id,
-      adminUid: auth?.currentUser?.uid || '', summary: 'Reordered project catalog', result: 'success', createdAt: serverTimestamp(),
-    });
-  });
+  await reorderProjectThroughApi(id, direction);
 }
 export async function saveSettings(settings: PortfolioSettings) {
   if (!httpsUrl(settings.headshot) || !pdfUrl(settings.resumeUrl))
@@ -150,13 +129,25 @@ export async function setEnquiryStatus(id: string, status: Enquiry['status']) {
   await updateDoc(doc(database(), 'enquiries', id), { status });
 }
 
-type CmsCollection = 'categories' | 'services' | 'skills' | 'process';
+type CmsCollection = 'services' | 'skills' | 'process';
 export function watchSiteContent(next: (value: SiteContent) => void, fail: (error: Error) => void) {
   return onSnapshot(doc(database(), 'siteContent', 'general'), (snap) => next(snap.exists() ? { ...defaultContent, ...snap.data() } as SiteContent : defaultContent), fail);
 }
 export function watchCmsCollection<T extends { id: string; order: number; published: boolean }>(name: CmsCollection, admin: boolean, next: (items: T[]) => void, fail: (error: Error) => void) {
   const ref = collection(database(), name);
   return onSnapshot(admin ? query(ref) : query(ref, where('published', '==', true)), snap => next(snap.docs.map(d => ({ ...d.data(), id: d.id } as T)).sort((a,b) => a.order-b.order)), fail);
+}
+export function watchProjectCategories(admin: boolean, next: (items: CategoryItem[]) => void, fail: (error: Error) => void) {
+  const ref = collection(database(), 'categories');
+  return onSnapshot(admin ? query(ref) : query(ref, where('published', '==', true)), (snap) => {
+    const items = snap.docs.map((entry) => normalizeCategory({ ...entry.data(), id: entry.id }, entry.id)).sort((a,b) => a.order-b.order || a.id.localeCompare(b.id));
+    if (admin) return next(items);
+    const visible = items.filter((item) => item.published && item.enabled);
+    next(visible);
+  }, (error) => {
+    if (!admin) next(fallbackCategories().filter((item) => item.published && item.enabled));
+    fail(error);
+  });
 }
 export function watchMedia(next: (items: MediaAsset[]) => void, fail: (error: Error) => void) {
   return onSnapshot(collection(database(), 'media'), snap => next(snap.docs.map(d => ({ ...d.data(), id: d.id } as MediaAsset))), fail);
@@ -173,18 +164,18 @@ export async function saveSiteContent(value: SiteContent) {
     tx.set(doc(collection(database(), 'auditLogs')), { action: 'site-content.update', entityType: 'siteContent', entityId: 'general', adminUid: auth?.currentUser?.uid || '', summary: 'Updated public website content', result: 'success', createdAt: serverTimestamp() });
   });
 }
-export async function saveCmsItem(name: CmsCollection, item: ServiceItem | SkillItem | ProcessItem | CategoryItem) {
+export async function saveCmsItem(name: CmsCollection, item: ServiceItem | SkillItem | ProcessItem) {
   if (!item.id || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.id)) throw new Error('Use a lowercase unique ID.');
   await setDoc(doc(database(), name, item.id), { ...item, updatedAt: serverTimestamp(), updatedBy: auth?.currentUser?.uid || '', schemaVersion: 1 }, { merge: true });
   await setDoc(doc(collection(database(), 'auditLogs')), { action: `${name}.update`, entityType: name, entityId: item.id, adminUid: auth?.currentUser?.uid || '', summary: `Updated ${name} item`, result: 'success', createdAt: serverTimestamp() });
 }
 export async function removeCmsItem(name: CmsCollection, id: string) {
-  if (name === 'categories') {
-    const linked = await import('firebase/firestore').then(({ getDocs }) => getDocs(query(collection(database(), 'projects'), where('category', '==', id))));
-    if (!linked.empty) throw new Error('Reassign projects before deleting this category.');
-  }
   await deleteDoc(doc(database(), name, id));
 }
+export const saveProjectCategory = (category: CategoryItem, creating: boolean) => manageCategoryThroughApi({ action:'save', category, creating });
+export const setProjectCategoryState = (id: string, action: 'publish'|'unpublish'|'enable'|'disable') => manageCategoryThroughApi({ action, id });
+export const reorderProjectCategory = (id: string, direction: -1|1) => manageCategoryThroughApi({ action:'reorder', id, direction });
+export const removeProjectCategory = (id: string) => manageCategoryThroughApi({ action:'delete', id });
 export async function updateEnquiry(id: string, status: Enquiry['status'], internalNote = '') {
   await updateDoc(doc(database(), 'enquiries', id), { status, internalNote: internalNote.slice(0, 2000), updatedAt: serverTimestamp() });
 }

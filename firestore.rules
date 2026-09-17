@@ -17,9 +17,8 @@ service cloud.firestore {
       // references before atomically writing the project, revision, and audit log.
       allow create: if false;
       allow update: if admin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','order','updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
         && request.resource.data.status in ['draft','published']
-        && request.resource.data.order is int && request.resource.data.order >= 0
         && request.resource.data.updatedAt == request.time;
       allow delete: if admin();
     }
@@ -52,8 +51,9 @@ service cloud.firestore {
     }
     match /categories/{id} {
       allow read: if resource.data.published == true || admin();
-      allow create, update: if admin() && cmsBase(request.resource.data) && request.resource.data.keys().hasOnly(['id','name','slug','description','iconName','order','published','mediaLayout','accent','updatedAt','updatedBy','schemaVersion']) && request.resource.data.id == id && request.resource.data.slug == id && text(request.resource.data,'name',80);
-      allow delete: if admin();
+      // Category mutations use the protected server API so dynamic field schemas
+      // can be validated without returning to complex client-side rules.
+      allow create, update, delete: if false;
     }
     match /services/{id} {
       allow read: if resource.data.published == true || admin();

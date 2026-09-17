@@ -8,6 +8,7 @@ import { parseRoute } from '../src/lib/routes';
 import { signUpload } from '../server/signature';
 import { createSignHandler, createEnquiryHandler, createMediaDeleteHandler, type Services } from '../server/handlers';
 import { canonicalCategoryFields, galleryAspectRatio, galleryRatioLabel, normalizeGalleryDisplaySettings, normalizeProject, normalizeProjectCategory, projectCta, projectWriteFields, removedManagedMediaIds, sanitizeCategoryFields, significantDisplayRatioDifference, significantRatioDifference } from '../src/lib/projects';
+import { normalizeCategory, validateCategory } from '../src/lib/categories';
 import type { Request, Response } from '../server/http';
 
 const valid = {
@@ -323,6 +324,18 @@ test('category configuration clears incompatible data and exposes only valid con
   assert.deepEqual(projectCta(site),{label:'Visit Website',url:'https://example.com'});
   assert.equal(significantRatioDifference(1600,900,'website'),false);
   assert.equal(significantRatioDifference(900,1600,'website'),true);
+});
+
+test('dynamic category definitions validate fields and drive project writes without source literals', () => {
+  const category=validateCategory({id:'social-media-design',slug:'social-media-design',name:'Social Media Designs',description:'',order:8,published:true,enabled:true,schemaVersion:2,mediaConfig:{defaultRatio:'4:5',recommendedWidth:1080,recommendedHeight:1350,guidance:'Recommended 1080 x 1350 px',defaultFit:'contain'},fields:[{key:'platform',label:'Platform',type:'select',required:true,options:['Instagram','Facebook']},{key:'brief',label:'Creative brief',type:'textarea',required:false},{key:'liveUrl',label:'Published URL',type:'url',required:false}],cta:{label:'View post',urlField:'liveUrl'}});
+  const project=normalizeProject({id:'social-card',slug:'social-card',title:'Social card',category:category.id,summary:'Campaign creative',role:'',status:'published',order:0,lastUpdated:'',categoryFields:{platform:'Instagram',brief:'Launch post',liveUrl:'https://example.com/post'},gallery:[{id:'cover',url:'https://example.com/social.png',alt:'Social campaign card',order:0,ownership:'external'}],coverImageId:'cover',mediaIds:[],schemaVersion:2},category);
+  const fields=projectWriteFields(project,category);
+  assert.equal(fields.category,'social-media-design');
+  assert.equal(fields.categoryLabel,'Social Media Designs');
+  assert.deepEqual(projectCta(project,category),{label:'View post',url:'https://example.com/post'});
+  assert.throws(()=>projectWriteFields({...project,categoryFields:{...project.categoryFields,platform:'TikTok'}},category),/invalid option/);
+  assert.throws(()=>validateCategory({...category,fields:[{key:'bad-key',label:'Bad',type:'text',required:false}]}),/safe keys/);
+  assert.equal(normalizeCategory({...category,published:false},category.id).published,false);
 });
 
 test('category normalization keeps labels and edit forms aligned for legacy records', () => {

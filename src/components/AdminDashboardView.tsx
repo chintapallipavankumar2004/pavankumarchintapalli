@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Copy, Edit2, Eye, FolderKanban, LayoutDashboard, LogOut, Mail, Menu, Plus, Search, Settings, Trash2, X } from 'lucide-react';
-import type { Enquiry, Project, ViewMode } from '../types';
+import type { CategoryItem, Enquiry, Project, ViewMode } from '../types';
 import { PROFILE_INFO } from '../data/initialData';
 import { projectCover, projectTechnologies } from '../lib/projects';
 import { CmsManager } from './CmsManager';
@@ -8,6 +8,7 @@ import { CmsManager } from './CmsManager';
 type Tab = 'dashboard' | 'projects' | 'enquiries' | 'manage' | 'media';
 interface Props {
   projects: Project[];
+  categories: CategoryItem[];
   enquiries: Enquiry[];
   onOpenAddProject: () => void;
   onOpenEditProject: (project: Project) => void;
@@ -29,7 +30,7 @@ const nav: { id: Tab; label: string; icon: React.ComponentType<{ className?: str
   { id: 'media', label: 'Media / Cleanup Jobs', icon: Trash2 },
 ];
 
-export const AdminDashboardView: React.FC<Props> = ({ projects, enquiries, onOpenAddProject, onOpenEditProject, onDuplicateProject, onOpenDeleteProject, onPreviewProject, onSwitchView, onTogglePublish, onReorder, onEnquiryStatus, onDeleteEnquiry }) => {
+export const AdminDashboardView: React.FC<Props> = ({ projects, categories, enquiries, onOpenAddProject, onOpenEditProject, onDuplicateProject, onOpenDeleteProject, onPreviewProject, onSwitchView, onTogglePublish, onReorder, onEnquiryStatus, onDeleteEnquiry }) => {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -66,7 +67,7 @@ export const AdminDashboardView: React.FC<Props> = ({ projects, enquiries, onOpe
         {activeTab === 'dashboard' && <Dashboard projects={projects} enquiries={enquiries} onChoose={choose} />}
         {activeTab === 'projects' && <Projects projects={projects} filtered={filtered} search={search} setSearch={setSearch} onAdd={onOpenAddProject} onEdit={onOpenEditProject} onDuplicate={onDuplicateProject} onDelete={onOpenDeleteProject} onPreview={onPreviewProject} onToggle={onTogglePublish} onReorder={onReorder} />}
         {activeTab === 'enquiries' && <Enquiries enquiries={enquiries} onStatus={onEnquiryStatus} onDelete={setDeleteTarget} />}
-        {activeTab === 'manage' && <CmsManager area="manage" />}
+        {activeTab === 'manage' && <CmsManager area="manage" projects={projects} categories={categories} />}
         {activeTab === 'media' && <CmsManager area="media" />}
       </div>
     </main>

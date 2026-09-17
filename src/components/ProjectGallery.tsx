@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Project } from '../types';
-import { PROJECT_CATEGORIES, galleryAspectRatio, normalizeGalleryDisplaySettings } from '../lib/projects';
+import { galleryAspectRatio, normalizeGalleryDisplaySettings } from '../lib/projects';
+import { categoryAspectRatio, categoryById } from '../lib/categories';
+import { useContent } from '../lib/content';
 
 export function ProjectGallery({ project }: { project: Project }) {
+  const { categories } = useContent();
+  const category = categoryById(project.category, categories);
   const items = project.gallery;
   const [active, setActive] = useState(() => Math.max(0, items.findIndex((item) => item.id === project.coverImageId)));
   const [loadedRatios, setLoadedRatios] = useState<Record<string, number>>({});
@@ -31,7 +35,7 @@ export function ProjectGallery({ project }: { project: Project }) {
   const hasStoredOriginalRatio = !!(activeDisplay.naturalWidth && activeDisplay.naturalHeight);
   const ratio = activeDisplay.ratioMode === 'original' && !hasStoredOriginalRatio && loadedRatios[activeItem.id]
     ? loadedRatios[activeItem.id]
-    : galleryAspectRatio(activeItem, PROJECT_CATEGORIES[project.category].ratio);
+    : galleryAspectRatio(activeItem, categoryAspectRatio(category));
   const move = (direction: -1 | 1) => {
     setUserPaused(true);
     setActive((current) => (current + direction + items.length) % items.length);

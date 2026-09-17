@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
-import { doc, getDoc, setDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { projectWriteFields } from '../../src/lib/projects';
+import { DEFAULT_PROJECT_CATEGORIES, normalizeCategory } from '../../src/lib/categories';
 let env: RulesTestEnvironment;
 test.beforeAll(async () => {
   env = await initializeTestEnvironment({
@@ -67,6 +68,7 @@ test.beforeAll(async () => {
     });
     await setDoc(doc(db, 'enquiries/test-enquiry'), { fullName:'Test Sender', email:'sender@example.com', phone:'', service:'website', budget:'Not specified', description:'This is an enquiry that can be safely deleted during the browser test.', status:'new', createdAt:Timestamp.now() });
     await setDoc(doc(db, 'services/webapp'), { id:'webapp', title:'Web Applications', description:'Test service', iconName:'terminal', features:['Dashboards'], order:0, published:true, schemaVersion:1, updatedAt:Timestamp.now(), updatedBy:account.localId });
+    for(const category of Object.values(DEFAULT_PROJECT_CATEGORIES))await setDoc(doc(db,'categories',category.id),{...category,updatedAt:Timestamp.now(),updatedBy:account.localId});
   });
 });
 test.afterAll(async () => {
@@ -80,7 +82,12 @@ test.beforeEach(async ({ context }) => {
   await context.route('**/api/projects/save', async (route) => {
     const body = route.request().postDataJSON() as { project: any; creating: boolean };
     try {
-      const fields = projectWriteFields(body.project);
+      let definition;
+      await env.withSecurityRulesDisabled(async(admin)=>{
+        const snapshot=await getDoc(doc(admin.firestore(),'categories',body.project.category));
+        if(snapshot.exists())definition=normalizeCategory({...snapshot.data(),id:snapshot.id},snapshot.id);
+      });
+      const fields = projectWriteFields(body.project,definition);
       await env.withSecurityRulesDisabled(async (admin) => {
         const database = admin.firestore();
         const ref = doc(database,'projects',body.project.id);
@@ -91,6 +98,44 @@ test.beforeEach(async ({ context }) => {
     } catch (error) {
       await route.fulfill({status:400,contentType:'application/json',body:JSON.stringify({error:error instanceof Error?error.message:'Invalid project',stage:'validation'})});
     }
+  });
+  await context.route('**/api/projects/reorder',async(route)=>{
+    const body=route.request().postDataJSON() as {id:string;direction:-1|1};
+    await env.withSecurityRulesDisabled(async(admin)=>{
+      const database=admin.firestore();
+      const snapshot=await getDocs(collection(database,'projects'));
+      const items=snapshot.docs.map((entry)=>({id:entry.id,order:Number.isInteger(entry.data().order)?entry.data().order:Number.MAX_SAFE_INTEGER})).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+      const index=items.findIndex((item)=>item.id===body.id);const target=index+body.direction;
+      if(index>=0&&target>=0&&target<items.length)[items[index],items[target]]=[items[target],items[index]];
+      await Promise.all(items.map((item,order)=>updateDoc(doc(database,'projects',item.id),{order,updatedAt:serverTimestamp()})));
+    });
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ordering:true})});
+  });
+  await context.route('**/api/categories/manage',async(route)=>{
+    const body=route.request().postDataJSON() as any;
+    try{
+      await env.withSecurityRulesDisabled(async(admin)=>{
+        const database=admin.firestore();
+        if(body.action==='save'){
+          const category=normalizeCategory(body.category,body.category.id);
+          await setDoc(doc(database,'categories',category.id),{...category,updatedAt:serverTimestamp(),updatedBy:'browser-test'},{merge:false});
+        }else if(body.action==='delete'){
+          const projects=await getDocs(collection(database,'projects'));
+          if(projects.docs.some((entry)=>entry.data().category===body.id))throw new Error('Projects still use this category.');
+          await deleteDoc(doc(database,'categories',body.id));
+        }else if(body.action==='reorder'){
+          const snapshot=await getDocs(collection(database,'categories'));
+          const items=snapshot.docs.map((entry)=>({id:entry.id,order:Number.isInteger(entry.data().order)?entry.data().order:Number.MAX_SAFE_INTEGER})).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+          const index=items.findIndex((item)=>item.id===body.id);const target=index+body.direction;
+          if(index>=0&&target>=0&&target<items.length)[items[index],items[target]]=[items[target],items[index]];
+          await Promise.all(items.map((item,order)=>updateDoc(doc(database,'categories',item.id),{order,updatedAt:serverTimestamp()})));
+        }else{
+          const updates=body.action==='publish'?{published:true}:body.action==='unpublish'?{published:false}:body.action==='enable'?{enabled:true}:{enabled:false};
+          await updateDoc(doc(database,'categories',body.id),{...updates,updatedAt:serverTimestamp()});
+        }
+      });
+      await route.fulfill({status:body.action==='save'&&body.creating?201:200,contentType:'application/json',body:JSON.stringify({saved:true,id:body.id||body.category?.id})});
+    }catch(error){await route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:error instanceof Error?error.message:'Category action failed'})});}
   });
   await context.route(/^https:\/\//, (route) => route.abort());
 });
@@ -192,6 +237,7 @@ test('service selection works; missing App Check never produces a false success;
 test('gallery autoplay stays disabled when reduced motion is requested', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
+  await page.locator('#project-card-published-project').getByRole('link',{name:'View Project Details'}).click();
   const gallery=page.getByRole('region',{name:'Published Test Project image gallery'});
   const current=gallery.locator('[aria-current="true"]');
   await expect(current).toHaveAttribute('aria-label','Show image 1 of 2');
@@ -289,6 +335,41 @@ test('authorized admin can edit, publish, reorder and delete; another browser se
   await expect(
     page.getByRole('row').filter({ hasText: 'Copy of New Portfolio Project' }),
   ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Manage Website', exact: true }).click();
+  await page.getByRole('tab',{name:'Project categories'}).click();
+  await page.getByRole('button',{name:'Add Category'}).click();
+  await page.getByLabel('Category name').fill('Thumbnails');
+  await expect(page.getByLabel('Category ID / slug')).toHaveValue('thumbnails');
+  await page.getByLabel('Category ID / slug').fill('thumbnail');
+  await page.getByRole('button',{name:'Add field'}).click();
+  await page.getByLabel('Field key').fill('designTools');
+  await page.getByLabel('Display label').fill('Design tools');
+  await page.getByLabel('Field type').selectOption('list');
+  await page.getByLabel('Published in public filters').check();
+  await page.getByRole('button',{name:'Save category'}).click();
+  await expect(page.getByRole('row').filter({hasText:'Thumbnails'})).toBeVisible();
+  await page.getByRole('button',{name:'Projects',exact:true}).click();
+  await page.getByRole('button',{name:'Add Project',exact:true}).click();
+  await page.getByLabel('Category').selectOption('thumbnail');
+  await expect(page.getByRole('heading',{name:'Thumbnails details'})).toBeVisible();
+  await expect(page.getByLabel('Design tools')).toBeVisible();
+  await page.getByLabel('Project title',{exact:true}).fill('Thumbnail Launch Set');
+  await page.getByLabel('Short summary',{exact:true}).fill('A dynamic thumbnail category project.');
+  await page.getByLabel('Image 1 URL or upload',{exact:true}).fill('https://example.com/thumbnail.png');
+  await page.getByLabel('Alt text',{exact:true}).fill('Thumbnail launch artwork');
+  await page.getByLabel('Design tools').fill('Canva');
+  await page.getByLabel('Visibility').selectOption('published');
+  await page.getByRole('button',{name:'Save Project'}).click();
+  const thumbnailRow=page.getByRole('row').filter({hasText:'Thumbnail Launch Set'});
+  await expect(thumbnailRow).toBeVisible();
+  await thumbnailRow.getByRole('button',{name:'Edit Project',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Thumbnails details'})).toBeVisible();
+  await expect(page.getByLabel('Design tools')).toHaveValue('Canva');
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  await publicPage.goto('http://127.0.0.1:3100/');
+  await expect(publicPage.getByRole('button',{name:/Thumbnails/})).toBeVisible();
+  await publicPage.getByRole('button',{name:/Thumbnails/}).click();
+  await expect(publicPage.getByRole('heading',{name:'Thumbnail Launch Set'})).toBeVisible();
   await page.getByRole('button', { name: 'Manage Website', exact: true }).click();
   await page.getByRole('tab', { name: 'Display settings' }).click();
   await page.getByLabel('Availability text (optional)').fill('Discuss your next project');

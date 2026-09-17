@@ -12,8 +12,9 @@
     "test:rules": "node scripts/run-rules.cjs",
     "test:rules:run": "node --experimental-require-module --import tsx --test tests/firestore.rules.test.ts",
     "test:browser": "node scripts/run-rules.cjs --browser",
-    "admin:provision": "node --experimental-require-module --env-file=.env.local --import tsx scripts/provision-admin.ts"
-    ,"cms:seed": "node --experimental-require-module --env-file=.env.local --import tsx scripts/seed-cms.ts",
+    "admin:provision": "node --experimental-require-module --env-file=.env.local --import tsx scripts/provision-admin.ts",
+    "cms:seed": "node --experimental-require-module --env-file=.env.local --import tsx scripts/seed-cms.ts",
+    "cms:seed-categories": "node --experimental-require-module --env-file=.env.local --import tsx scripts/seed-project-categories.ts",
     "cms:migrate-gallery": "node --experimental-require-module --env-file=.env.local --import tsx scripts/migrate-project-gallery.ts"
   },
   "engines": {

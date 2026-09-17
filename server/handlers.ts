@@ -13,7 +13,8 @@ import {
 import { signUpload } from './signature.js';
 import { validateEnquiry } from '../src/lib/validation.js';
 import { projectWriteFields } from '../src/lib/projects.js';
-import type { Project } from '../src/types.js';
+import { DEFAULT_PROJECT_CATEGORIES, categoryIdPattern, normalizeCategory, validateCategory } from '../src/lib/categories.js';
+import type { CategoryItem, Project } from '../src/types.js';
 
 export type Services = ReturnType<typeof adminServices>;
 async function requireAdmin(req: Request, services: Services) {
@@ -117,17 +118,22 @@ export function createProjectSaveHandler(services = adminServices) {
       const body = bodyObject(req, 65536);
       if (Object.keys(body).some((key) => !['project', 'creating'].includes(key)) || typeof body.creating !== 'boolean' || !body.project || typeof body.project !== 'object' || Array.isArray(body.project)) throw new HttpError(400, 'Invalid project save request.');
       const project = body.project as Project;
-      if (typeof project.id !== 'string' || typeof project.slug !== 'string' || project.id !== project.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(project.slug) || project.slug.length > 80 || !['website','webapp','poster','logo','automation','app'].includes(project.category)) throw new HttpError(400, 'Use a valid project slug and category.');
-      stage = 'validation';
-      let fields: ReturnType<typeof projectWriteFields>;
-      try { fields = projectWriteFields(project); }
-      catch (error) { throw new HttpError(400, error instanceof Error ? error.message : 'Check the project fields.'); }
+      if (typeof project.id !== 'string' || typeof project.slug !== 'string' || project.id !== project.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(project.slug) || project.slug.length > 80 || typeof project.category!=='string' || !categoryIdPattern.test(project.category)) throw new HttpError(400, 'Use a valid project slug and category.');
       stage = 'project-transaction';
       const ref = db.doc(`projects/${project.id}`);
       await db.runTransaction(async (tx) => {
-        const existing = await tx.get(ref);
+        const [existing,categorySnapshot] = await Promise.all([tx.get(ref),tx.get(db.doc(`categories/${project.category}`))]);
         if (body.creating && existing.exists) throw new HttpError(409, 'This slug is already used. Choose another.');
         if (!body.creating && !existing.exists) throw new HttpError(409, 'This project was deleted. Refresh the catalog.');
+        const fallback=DEFAULT_PROJECT_CATEGORIES[project.category];
+        if(!categorySnapshot.exists&&!fallback)throw new HttpError(400,'The selected project category no longer exists.');
+        const definition=categorySnapshot.exists?normalizeCategory({...categorySnapshot.data(),id:categorySnapshot.id},categorySnapshot.id):fallback;
+        if(!definition.enabled&&(body.creating||existing.data()?.category!==project.category))throw new HttpError(400,'The selected project category is disabled.');
+        stage = 'validation';
+        let fields: ReturnType<typeof projectWriteFields>;
+        try { fields = projectWriteFields(project,definition); }
+        catch (error) { throw new HttpError(400, error instanceof Error ? error.message : 'Check the project fields.'); }
+        stage = 'project-transaction';
         for (const item of fields.gallery) {
           if (item.ownership !== 'cloudinary-managed') continue;
           const media = await tx.get(db.doc(`media/${item.mediaId}`));
@@ -143,6 +149,108 @@ export function createProjectSaveHandler(services = adminServices) {
       if (!(error instanceof HttpError)) console.error(`Portfolio project save failed at ${stage}.`);
       if (error instanceof HttpError) return json(res, error.status, { error: error.message, stage });
       return json(res, 503, { error: 'The project could not be saved. Please try again.', stage });
+    }
+  };
+}
+
+export function createProjectReorderHandler(services = adminServices) {
+  return async (req: Request, res: Response) => {
+    let stage='request';
+    try{
+      postOnly(req,res);
+      stage='authorization';
+      const {uid,db}=await requireAdmin(req,services());
+      const body=bodyObject(req,2048);
+      if(Object.keys(body).some((key)=>!['id','direction'].includes(key))||typeof body.id!=='string'||body.id.length>80||!categoryIdPattern.test(body.id)||![-1,1].includes(Number(body.direction)))throw new HttpError(400,'Invalid project reorder request.');
+      stage='project-reorder';
+      let ordering:string[]=[];
+      await db.runTransaction(async(tx)=>{
+        const snapshot=await tx.get(db.collection('projects'));
+        if(snapshot.size>400)throw new HttpError(409,'The catalog is too large for this reorder operation.');
+        const items=snapshot.docs.map((entry)=>({id:entry.id,order:Number.isInteger(entry.data().order)?entry.data().order:Number.MAX_SAFE_INTEGER})).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+        const index=items.findIndex((item)=>item.id===body.id);
+        if(index<0)throw new HttpError(404,'Project not found. Refresh the catalog.');
+        const target=index+Number(body.direction);
+        if(target>=0&&target<items.length)[items[index],items[target]]=[items[target],items[index]];
+        ordering=items.map((item)=>item.id);
+        items.forEach((item,order)=>tx.update(db.doc(`projects/${item.id}`),{order,updatedAt:FieldValue.serverTimestamp()}));
+        tx.set(db.collection('auditLogs').doc(),{action:'project.reorder',entityType:'project',entityId:String(body.id),adminUid:uid,summary:'Reordered project catalog',result:'success',createdAt:FieldValue.serverTimestamp()});
+      });
+      json(res,200,{ordering});
+    }catch(error){
+      if(!(error instanceof HttpError))console.error(`Portfolio project reorder failed at ${stage}.`);
+      if(error instanceof HttpError)return json(res,error.status,{error:error.message,stage});
+      return json(res,503,{error:'Projects could not be reordered. Please try again.',stage});
+    }
+  };
+}
+
+export function createCategoryManageHandler(services = adminServices) {
+  return async(req:Request,res:Response)=>{
+    let stage='request';
+    try{
+      postOnly(req,res);
+      stage='authorization';
+      const {uid,db}=await requireAdmin(req,services());
+      const body=bodyObject(req,32768);
+      const action=String(body.action||'');
+      if(!['save','publish','unpublish','enable','disable','reorder','delete'].includes(action))throw new HttpError(400,'Invalid category action.');
+      stage=`category-${action}`;
+      if(action==='save'){
+        if(Object.keys(body).some((key)=>!['action','category','creating'].includes(key))||typeof body.creating!=='boolean')throw new HttpError(400,'Invalid category save request.');
+        let category:CategoryItem;
+        try{category=validateCategory(body.category);}catch(error){throw new HttpError(400,error instanceof Error?error.message:'Check the category fields.');}
+        const ref=db.doc(`categories/${category.id}`);
+        await db.runTransaction(async(tx)=>{
+          const existing=await tx.get(ref);
+          if(body.creating&&existing.exists)throw new HttpError(409,'That category ID already exists.');
+          if(!body.creating&&!existing.exists)throw new HttpError(404,'This category was deleted. Refresh the list.');
+          if(existing.exists)tx.set(db.collection('contentRevisions').doc(),{entityType:'category',entityId:category.id,snapshot:existing.data(),createdAt:FieldValue.serverTimestamp(),createdBy:uid});
+          tx.set(ref,{...category,createdAt:existing.data()?.createdAt||FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp(),updatedBy:uid});
+          tx.set(db.collection('auditLogs').doc(),{action:body.creating?'category.create':'category.update',entityType:'category',entityId:category.id,adminUid:uid,summary:body.creating?'Created project category':'Updated project category',result:'success',createdAt:FieldValue.serverTimestamp()});
+        });
+        return json(res,body.creating?201:200,{saved:true,id:category.id});
+      }
+      if(typeof body.id!=='string'||body.id.length>60||!categoryIdPattern.test(body.id)||Object.keys(body).some((key)=>!['action','id','direction'].includes(key)))throw new HttpError(400,'Invalid category request.');
+      const ref=db.doc(`categories/${body.id}`);
+      if(action==='reorder'){
+        if(![-1,1].includes(Number(body.direction)))throw new HttpError(400,'Invalid category direction.');
+        let ordering:string[]=[];
+        await db.runTransaction(async(tx)=>{
+          const snapshot=await tx.get(db.collection('categories'));
+          if(snapshot.size>400)throw new HttpError(409,'There are too many categories for this reorder operation.');
+          const items=snapshot.docs.map((entry)=>({id:entry.id,order:Number.isInteger(entry.data().order)?entry.data().order:Number.MAX_SAFE_INTEGER})).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+          const index=items.findIndex((item)=>item.id===body.id);
+          if(index<0)throw new HttpError(404,'Category not found. Refresh the list.');
+          const target=index+Number(body.direction);
+          if(target>=0&&target<items.length)[items[index],items[target]]=[items[target],items[index]];
+          ordering=items.map((item)=>item.id);
+          items.forEach((item,order)=>tx.update(db.doc(`categories/${item.id}`),{order,updatedAt:FieldValue.serverTimestamp(),updatedBy:uid}));
+          tx.set(db.collection('auditLogs').doc(),{action:'category.reorder',entityType:'category',entityId:String(body.id),adminUid:uid,summary:'Reordered project categories',result:'success',createdAt:FieldValue.serverTimestamp()});
+        });
+        return json(res,200,{ordering});
+      }
+      await db.runTransaction(async(tx)=>{
+        const existing=await tx.get(ref);
+        if(!existing.exists)throw new HttpError(404,'Category not found. Refresh the list.');
+        const linked=action==='delete'?await tx.get(db.collection('projects').where('category','==',body.id).limit(1)):null;
+        tx.set(db.collection('contentRevisions').doc(),{entityType:'category',entityId:String(body.id),snapshot:existing.data(),createdAt:FieldValue.serverTimestamp(),createdBy:uid});
+        if(action==='delete'){
+          if(DEFAULT_PROJECT_CATEGORIES[String(body.id)])throw new HttpError(409,'Core categories can be disabled or unpublished instead of deleted.');
+          if(linked&&!linked.empty)throw new HttpError(409,`${linked.size} or more projects use this category. Reassign them before deleting it.`);
+          tx.delete(ref);
+        }else{
+          const updates=action==='publish'?{published:true}:action==='unpublish'?{published:false}:action==='enable'?{enabled:true}:{enabled:false};
+          tx.update(ref,{...updates,updatedAt:FieldValue.serverTimestamp(),updatedBy:uid});
+        }
+        const summaries:Record<string,string>={publish:'Published project category',unpublish:'Unpublished project category',enable:'Enabled project category',disable:'Disabled project category',delete:'Deleted unused project category'};
+        tx.set(db.collection('auditLogs').doc(),{action:`category.${action}`,entityType:'category',entityId:String(body.id),adminUid:uid,summary:summaries[action],result:'success',createdAt:FieldValue.serverTimestamp()});
+      });
+      json(res,200,action==='delete'?{deleted:true,id:body.id}:{saved:true,id:body.id});
+    }catch(error){
+      if(!(error instanceof HttpError))console.error(`Portfolio category action failed at ${stage}.`);
+      if(error instanceof HttpError)return json(res,error.status,{error:error.message,stage});
+      return json(res,503,{error:'The category action could not be completed. Please try again.',stage});
     }
   };
 }

@@ -1,4 +1,5 @@
 import type {
+  CategoryItem,
   GalleryDisplaySettings,
   GalleryPresetRatio,
   MediaOwnership,
@@ -8,27 +9,7 @@ import type {
   ProjectGalleryItem,
 } from '../types';
 import { httpsUrl } from './validation.js';
-
-export interface CategoryFieldDefinition {
-  key: keyof ProjectCategoryFields;
-  label: string;
-  kind?: 'text' | 'textarea' | 'list' | 'url' | 'select';
-  options?: string[];
-  max?: number;
-}
-
-export interface ProjectCategoryDefinition {
-  label: string;
-  ratio: number;
-  guidance: string;
-  fields: CategoryFieldDefinition[];
-  ctaLabel?: string;
-  urlKey?: keyof ProjectCategoryFields;
-  containMedia: boolean;
-}
-
-const technologies: CategoryFieldDefinition = { key: 'technologies', label: 'Technologies', kind: 'list', max: 30 };
-const majorFeatures: CategoryFieldDefinition = { key: 'majorFeatures', label: 'Major features', kind: 'list', max: 30 };
+import { categoryById, categoryIdPattern } from './categories.js';
 
 export const GALLERY_PRESET_RATIOS: Record<GalleryPresetRatio, number> = {
   '1:1': 1,
@@ -103,43 +84,8 @@ export function significantDisplayRatioDifference(item: ProjectGalleryItem, fall
   return Math.abs(original - selected) / selected > 0.2;
 }
 
-export const PROJECT_CATEGORIES: Record<ProjectCategory, ProjectCategoryDefinition> = {
-  website: {
-    label: 'Websites', ratio: 16 / 9, guidance: '16:9 - recommended 1600 x 900 px', containMedia: true,
-    ctaLabel: 'Visit Website', urlKey: 'liveUrl',
-    fields: [technologies, { key: 'liveUrl', label: 'Live website URL', kind: 'url' }, majorFeatures, { key: 'responsiveSupport', label: 'Responsive support' }, { key: 'hostingPlatform', label: 'Hosting / platform' }],
-  },
-  webapp: {
-    label: 'Web Applications', ratio: 16 / 9, guidance: '16:9 - recommended 1600 x 900 px', containMedia: true,
-    ctaLabel: 'Open Application', urlKey: 'liveUrl',
-    fields: [technologies, { key: 'liveUrl', label: 'Live application / demo URL', kind: 'url' }, majorFeatures, { key: 'userRoles', label: 'User roles', kind: 'list' }, { key: 'backendDatabase', label: 'Backend / database' }, { key: 'authentication', label: 'Authentication' }, { key: 'hostingPlatform', label: 'Hosting / platform' }],
-  },
-  app: {
-    label: 'Apps', ratio: 9 / 16, guidance: '9:16 for mobile screenshots or 16:9 for app showcases', containMedia: true,
-    ctaLabel: 'View App', urlKey: 'liveUrl',
-    fields: [technologies, { key: 'platform', label: 'Platform', kind: 'select', options: ['Android', 'iOS', 'Cross-platform'] }, { key: 'liveUrl', label: 'Store or demo URL', kind: 'url' }, majorFeatures, { key: 'appStatus', label: 'App status' }],
-  },
-  logo: {
-    label: 'Logos', ratio: 1, guidance: '1:1 - recommended 1600 x 1600 px with 10-15% safe padding', containMedia: true,
-    fields: [{ key: 'designTools', label: 'Design tools', kind: 'list' }, { key: 'brandIndustry', label: 'Brand / industry' }, { key: 'designStyle', label: 'Design style' }, { key: 'colourPalette', label: 'Colour palette' }, { key: 'brandBrief', label: 'Brand brief', kind: 'textarea' }],
-  },
-  poster: {
-    label: 'Posters', ratio: 4 / 5, guidance: '4:5 - recommended 1600 x 2000 px', containMedia: true,
-    fields: [{ key: 'designTools', label: 'Design tools', kind: 'list' }, { key: 'posterType', label: 'Poster type' }, { key: 'targetAudience', label: 'Target audience' }, { key: 'designStyle', label: 'Design style' }, { key: 'campaignName', label: 'Campaign / event name' }],
-  },
-  automation: {
-    label: 'Automations', ratio: 16 / 9, guidance: '16:9 - recommended 1600 x 900 px', containMedia: true,
-    ctaLabel: 'View Demo', urlKey: 'demoUrl',
-    fields: [{ key: 'toolsPlatforms', label: 'Tools / platforms', kind: 'list' }, { key: 'integrations', label: 'Integrations', kind: 'list' }, { key: 'trigger', label: 'Trigger' }, { key: 'automatedWorkflow', label: 'Automated workflow', kind: 'textarea' }, { key: 'businessOutcome', label: 'Business outcome', kind: 'textarea' }, { key: 'demoUrl', label: 'Demo URL (optional)', kind: 'url' }],
-  },
-};
-
-export const categoryFieldKeys = (category: ProjectCategory) =>
-  new Set(PROJECT_CATEGORIES[category].fields.map((field) => field.key));
-
-const projectCategories = Object.keys(PROJECT_CATEGORIES) as ProjectCategory[];
 export function normalizeProjectCategory(value: unknown, label?: unknown, tag?: unknown): ProjectCategory {
-  if (typeof value === 'string' && projectCategories.includes(value as ProjectCategory)) return value as ProjectCategory;
+  if (typeof value === 'string' && categoryIdPattern.test(value)) return value;
   const hint = `${typeof label === 'string' ? label : ''} ${typeof tag === 'string' ? tag : ''}`.trim().toLowerCase();
   if (/\bweb applications?\b|\bwebapps?\b/.test(hint)) return 'webapp';
   if (/\bautomations?\b/.test(hint)) return 'automation';
@@ -149,18 +95,20 @@ export function normalizeProjectCategory(value: unknown, label?: unknown, tag?: 
   return 'website';
 }
 
-export function sanitizeCategoryFields(category: ProjectCategory, input: ProjectCategoryFields) {
-  const allowed = categoryFieldKeys(category);
+export function sanitizeCategoryFields(category: ProjectCategory | CategoryItem, input: ProjectCategoryFields) {
+  const definition=typeof category==='string'?categoryById(category):category;
+  const allowed = new Set(definition.fields.map((field)=>field.key));
   return Object.fromEntries(
-    Object.entries(input).filter(([key, value]) => allowed.has(key as keyof ProjectCategoryFields) && value !== '' && (!Array.isArray(value) || value.length > 0)),
+    Object.entries(input||{}).filter(([key, value]) => allowed.has(key) && value !== '' && (!Array.isArray(value) || value.length > 0)),
   ) as ProjectCategoryFields;
 }
 
-export function canonicalCategoryFields(category: ProjectCategory, input: ProjectCategoryFields) {
-  const sanitized = sanitizeCategoryFields(category, input);
-  return Object.fromEntries(PROJECT_CATEGORIES[category].fields.map((field) => {
+export function canonicalCategoryFields(category: ProjectCategory | CategoryItem, input: ProjectCategoryFields) {
+  const definition=typeof category==='string'?categoryById(category):category;
+  const sanitized = sanitizeCategoryFields(definition, input);
+  return Object.fromEntries(definition.fields.map((field) => {
     const value = sanitized[field.key];
-    return [field.key, field.kind === 'list' ? (Array.isArray(value) ? value : []) : (typeof value === 'string' ? value : '')];
+    return [field.key, ['list','multiselect'].includes(field.type) ? (Array.isArray(value) ? value : []) : (typeof value === 'string' ? value : '')];
   })) as ProjectCategoryFields;
 }
 
@@ -193,23 +141,35 @@ export function normalizeGallery(input: Partial<Project> & Record<string, unknow
     : [];
 }
 
-export function normalizeProject(entry: Partial<Project> & Record<string, unknown>): Project {
+function genericCategoryFields(input: unknown): ProjectCategoryFields {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const result:ProjectCategoryFields={};
+  for(const [key,value] of Object.entries(input as Record<string,unknown>)){
+    if(typeof value==='string')result[key]=value;
+    else if(Array.isArray(value)&&value.every((item)=>typeof item==='string'))result[key]=value as string[];
+  }
+  return result;
+}
+
+export function normalizeProject(entry: Partial<Project> & Record<string, unknown>, configuredCategory?: CategoryItem): Project {
   const category = normalizeProjectCategory(entry.category, entry.categoryLabel, entry.tag);
+  const definition=configuredCategory||categoryById(category);
   const gallery = normalizeGallery(entry);
   const legacyFields: ProjectCategoryFields = {
     technologies: Array.isArray(entry.technologies) ? entry.technologies as string[] : [],
     liveUrl: typeof entry.liveUrl === 'string' ? entry.liveUrl : '',
   };
-  const categoryFields = sanitizeCategoryFields(category, {
+  const rawCategoryFields = {
     ...legacyFields,
     ...((entry.categoryFields || {}) as ProjectCategoryFields),
-  });
+  };
+  const categoryFields = configuredCategory || definition.fields.length ? sanitizeCategoryFields(definition, rawCategoryFields) : genericCategoryFields(rawCategoryFields);
   const requestedCover = typeof entry.coverImageId === 'string' ? entry.coverImageId : '';
   return {
     ...(entry as Project),
     category,
-    categoryLabel: PROJECT_CATEGORIES[category].label,
-    tag: String(entry.tag || PROJECT_CATEGORIES[category].label),
+    categoryLabel: definition.name || String(entry.categoryLabel || category),
+    tag: String(definition.name || entry.tag || entry.categoryLabel || category),
     gallery,
     coverImageId: gallery.some((item) => item.id === requestedCover) ? requestedCover : gallery[0]?.id || '',
     categoryFields,
@@ -226,14 +186,13 @@ export const projectTechnologies = (project: Project) => {
   return Array.isArray(value) ? value : [];
 };
 
-export function projectCta(project: Project) {
-  const definition = PROJECT_CATEGORIES[project.category];
-  if (!definition.ctaLabel || !definition.urlKey) return null;
-  const value = project.categoryFields[definition.urlKey];
+export function projectCta(project: Project, definition: CategoryItem = categoryById(project.category)) {
+  if (!definition.cta) return null;
+  const value = project.categoryFields[definition.cta.urlField];
   if (typeof value !== 'string' || !httpsUrl(value)) return null;
   const hostname = new URL(value).hostname.replace(/^www\./, '');
   if (['facebook.com','instagram.com','linkedin.com','x.com','twitter.com'].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) return null;
-  return { label: definition.ctaLabel, url: value };
+  return { label: definition.cta.label, url: value };
 }
 
 export function removedManagedMediaIds(previous: Project, next: Project) {
@@ -241,20 +200,25 @@ export function removedManagedMediaIds(previous: Project, next: Project) {
   return previous.gallery.flatMap((item) => item.ownership === 'cloudinary-managed' && item.mediaId && !retained.has(item.mediaId) ? [item.mediaId] : []);
 }
 
-export function significantRatioDifference(width: number, height: number, category: ProjectCategory) {
+function categoryRatio(definition:CategoryItem){return definition.mediaConfig.defaultRatio==='original'?16/9:GALLERY_PRESET_RATIOS[definition.mediaConfig.defaultRatio];}
+
+export function significantRatioDifference(width: number, height: number, category: ProjectCategory | CategoryItem) {
   if (!width || !height) return false;
   const ratio = width / height;
-  if (category === 'app') return Math.min(Math.abs(ratio - 9 / 16) / (9 / 16), Math.abs(ratio - 16 / 9) / (16 / 9)) > 0.2;
-  return Math.abs(ratio - PROJECT_CATEGORIES[category].ratio) / PROJECT_CATEGORIES[category].ratio > 0.2;
+  const definition=typeof category==='string'?categoryById(category):category;
+  const expected=categoryRatio(definition);
+  if(definition.id==='app'&&definition.mediaConfig.defaultRatio==='9:16')return Math.min(Math.abs(ratio-9/16)/(9/16),Math.abs(ratio-16/9)/(16/9))>0.2;
+  return Math.abs(ratio - expected) / expected > 0.2;
 }
 
-export function validateProject(project: Project) {
+export function validateProject(project: Project, definition: CategoryItem = categoryById(project.category)) {
   const textLimits: Array<[keyof Project, number]> = [['title',120],['summary',600],['categoryLabel',80],['tag',120],['role',200],['client',200],['timeline',200],['deliverables',1000],['fullDescription',10000],['challenge',10000]];
   for (const [key,max] of textLimits) {
     const value = project[key];
     if (value !== undefined && (typeof value !== 'string' || value.length > max)) throw new Error(`${String(key)} is invalid.`);
   }
   if (!project.title.trim() || !project.summary.trim()) throw new Error('Add a project title and short summary.');
+  if (!categoryIdPattern.test(project.category) || project.category !== definition.id) throw new Error('Choose a valid project category.');
   if (!Number.isInteger(project.order) || project.order < 0 || !['draft','published'].includes(project.status)) throw new Error('Project order or visibility is invalid.');
   if (project.solution !== undefined && (!Array.isArray(project.solution) || project.solution.length > 30 || project.solution.some((item) => typeof item !== 'string' || !item.trim() || item.length > 10000))) throw new Error('Solution must contain valid one-per-line text items.');
   if (project.gallery.length < 1 || project.gallery.length > 5) throw new Error('Add between 1 and 5 gallery images.');
@@ -272,33 +236,35 @@ export function validateProject(project: Project) {
     validateGalleryDisplaySettings(item.display, index + 1);
   });
   if (!ids.has(project.coverImageId)) throw new Error('Select a gallery cover image.');
-  const fields = sanitizeCategoryFields(project.category, project.categoryFields);
-  for (const key of ['liveUrl', 'demoUrl'] as const) {
-    const value = fields[key];
-    if (typeof value === 'string' && value && !httpsUrl(value)) throw new Error('External project links must use HTTPS.');
-  }
-  for (const definition of PROJECT_CATEGORIES[project.category].fields) {
-    const value = fields[definition.key];
-    if (value === undefined) continue;
-    if (definition.kind === 'list') {
-      if (!Array.isArray(value) || value.length > (definition.max || 30) || value.some((item) => typeof item !== 'string' || !item.trim() || item.length > 500)) throw new Error(`${definition.label} must contain valid one-per-line text items.`);
-    } else if (typeof value !== 'string' || value.length > (definition.kind === 'textarea' ? 2000 : definition.kind === 'url' ? 2048 : 500)) {
-      throw new Error(`${definition.label} is invalid.`);
+  const fields = sanitizeCategoryFields(definition, project.categoryFields);
+  for (const field of definition.fields) {
+    const value = fields[field.key];
+    const empty=value===undefined||value===''||(Array.isArray(value)&&value.length===0);
+    if(field.required&&empty)throw new Error(`${field.label} is required.`);
+    if(empty)continue;
+    if (['list','multiselect'].includes(field.type)) {
+      if (!Array.isArray(value) || value.length > 30 || value.some((item) => typeof item !== 'string' || !item.trim() || item.length > 500)) throw new Error(`${field.label} must contain valid one-per-line items.`);
+      if(field.type==='multiselect'&&value.some((item)=>!field.options?.includes(item)))throw new Error(`${field.label} contains an invalid option.`);
+    } else if (typeof value !== 'string' || value.length > (field.type === 'textarea' ? 2000 : field.type === 'url' ? 2048 : 500)) {
+      throw new Error(`${field.label} is invalid.`);
     }
+    if(field.type==='url'&&typeof value==='string'&&!httpsUrl(value))throw new Error(`${field.label} must use HTTPS.`);
+    if(field.type==='select'&&typeof value==='string'&&!field.options?.includes(value))throw new Error(`${field.label} contains an invalid option.`);
   }
 }
 
-export function projectWriteFields(project: Project) {
+export function projectWriteFields(project: Project, configuredCategory?: CategoryItem) {
+  const definition=configuredCategory||categoryById(project.category);
   if (!Array.isArray(project.gallery) || project.gallery.length < 1 || project.gallery.length > 5) throw new Error('Add between 1 and 5 gallery images.');
   const allowedProjectKeys = new Set(['id','slug','order','title','category','categoryLabel','tag','summary','fullDescription','categoryFields','gallery','coverImageId','schemaVersion','mediaIds','technologies','liveUrl','role','client','timeline','deliverables','status','image','thumbnail','bannerImage','lastUpdated','challenge','solution','createdAt','updatedAt']);
   if (Object.keys(project).some((key) => !allowedProjectKeys.has(key))) throw new Error('The project contains unsupported fields.');
   const allowedGalleryKeys = new Set(['id','url','publicId','mediaId','alt','order','caption','ownership','display']);
   if (project.gallery.some((item) => Object.keys(item).some((key) => !allowedGalleryKeys.has(key)))) throw new Error('A gallery image contains unsupported fields.');
   project.gallery.forEach((item, index) => validateGalleryDisplaySettings(item.display, index + 1));
-  const allowedCategoryKeys = categoryFieldKeys(normalizeProjectCategory(project.category, project.categoryLabel, project.tag));
-  if (Object.keys(project.categoryFields || {}).some((key) => !allowedCategoryKeys.has(key as keyof ProjectCategoryFields))) throw new Error('Remove fields that do not belong to the selected category.');
-  const normalized = normalizeProject(project as Project & Record<string, unknown>);
-  validateProject(normalized);
+  const allowedCategoryKeys = new Set(definition.fields.map((field)=>field.key));
+  if (Object.keys(project.categoryFields || {}).some((key) => !allowedCategoryKeys.has(key))) throw new Error('Remove fields that do not belong to the selected category.');
+  const normalized = normalizeProject(project as Project & Record<string, unknown>,definition);
+  validateProject(normalized,definition);
   return {
     slug: normalized.slug,
     order: normalized.order,
@@ -326,7 +292,7 @@ export function projectWriteFields(project: Project) {
       ownership: item.ownership,
       display: normalizeGalleryDisplaySettings(item.display),
     })),
-    categoryFields: canonicalCategoryFields(normalized.category, normalized.categoryFields),
+    categoryFields: canonicalCategoryFields(definition, normalized.categoryFields),
     mediaIds: normalized.gallery.flatMap((item) => item.mediaId ? [item.mediaId] : []),
     schemaVersion: 2 as const,
     coverImageId: normalized.coverImageId,

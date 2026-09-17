@@ -2,16 +2,20 @@ import React from 'react';
 import { ArrowLeft, CheckCircle2, ArrowRight, ExternalLink } from 'lucide-react';
 import type { Project } from '../types';
 import { ProjectGallery } from './ProjectGallery';
-import { PROJECT_CATEGORIES, projectCta, projectTechnologies } from '../lib/projects';
+import { projectCta, projectTechnologies } from '../lib/projects';
+import { categoryById } from '../lib/categories';
+import { useContent } from '../lib/content';
 interface Props {
   project: Project;
   onBackToPortfolio: () => void;
   onRequestSimilar: () => void;
 }
 export function ProjectDetailView({ project, onBackToPortfolio, onRequestSimilar }: Props) {
-  const cta = projectCta(project);
+  const { categories } = useContent();
+  const category = categoryById(project.category, categories);
+  const cta = projectCta(project, category);
   const technologies = projectTechnologies(project);
-  const details = PROJECT_CATEGORIES[project.category].fields.flatMap((field) => {
+  const details = category.fields.flatMap((field) => {
     if (['technologies','liveUrl','demoUrl'].includes(field.key)) return [];
     const value = project.categoryFields[field.key];
     return value && (!Array.isArray(value) || value.length) ? [{ label: field.label, value }] : [];

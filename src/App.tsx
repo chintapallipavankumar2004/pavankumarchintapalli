@@ -10,6 +10,7 @@ import { defaultContent } from './data/defaultContent';
 import { parseRoute } from './lib/routes';
 import { deleteMedia } from './lib/uploads';
 import { removedManagedMediaIds } from './lib/projects';
+import { categoryById } from './lib/categories';
 import { TopNavbar } from './components/TopNavbar';
 import { HeroSection } from './components/HeroSection';
 import { TrustStrip } from './components/TrustStrip';
@@ -48,6 +49,7 @@ export default function App() {
   const [publicSkills,setPublicSkills]=useState<SkillItem[]>([]);
   const [publicProcess,setPublicProcess]=useState<ProcessItem[]>([]);
   const [publicCategories,setPublicCategories]=useState<CategoryItem[]>([]);
+  const [adminCategories,setAdminCategories]=useState<CategoryItem[]>([]);
   const [publicLoading, setPublicLoading] = useState(firebaseConfigured);
   const [adminLoading, setAdminLoading] = useState(false);
   const [publicError, setPublicError] = useState('');
@@ -116,7 +118,7 @@ export default function App() {
     );
   }, []);
   useEffect(()=>{if(!db)return;const fail=()=>setPublicError('Website content is temporarily unavailable.');return repository.watchSiteContent(setContent,fail)},[]);
-  useEffect(()=>{if(!db)return;const fail=()=>setPublicError('Website content is temporarily unavailable.');const stops=[repository.watchCmsCollection<ServiceItem>('services',false,setPublicServices,fail),repository.watchCmsCollection<SkillItem>('skills',false,setPublicSkills,fail),repository.watchCmsCollection<ProcessItem>('process',false,setPublicProcess,fail),repository.watchCmsCollection<CategoryItem>('categories',false,setPublicCategories,fail)];return()=>stops.forEach(stop=>stop())},[]);
+  useEffect(()=>{if(!db)return;const fail=()=>setPublicError('Website content is temporarily unavailable.');const stops=[repository.watchCmsCollection<ServiceItem>('services',false,setPublicServices,fail),repository.watchCmsCollection<SkillItem>('skills',false,setPublicSkills,fail),repository.watchCmsCollection<ProcessItem>('process',false,setPublicProcess,fail),repository.watchProjectCategories(false,setPublicCategories,()=>{})];return()=>stops.forEach(stop=>stop())},[]);
   useEffect(() => {
     if (!db) return;
     return repository.watchSettings(
@@ -132,6 +134,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     setAdminProjects([]);
+    setAdminCategories([]);
     setEnquiries([]);
     setEditing(undefined);
     setDeleting(null);
@@ -154,9 +157,11 @@ export default function App() {
       fail,
     );
     const stopEnquiries = repository.watchEnquiries(setEnquiries, fail);
+    const stopCategories = repository.watchProjectCategories(true,setAdminCategories,fail);
     return () => {
       stopProjects();
       stopEnquiries();
+      stopCategories();
     };
   }, [admin, adminRoute]);
   const section = (id: string) => {
@@ -218,7 +223,7 @@ export default function App() {
   );
   return (
     <SettingsContext.Provider value={settings}>
-      <ContentContext.Provider value={{content,services:publicServices,skills:publicSkills,process:publicProcess,categories:publicCategories}}>
+      <ContentContext.Provider value={{content,services:publicServices,skills:publicSkills,process:publicProcess,categories:adminRoute&&admin?adminCategories:publicCategories}}>
       <div className="min-h-screen bg-[#f9f9ff] text-[#141b2b] flex flex-col font-sans">
         <Suspense fallback={notice('Loading…')}>
           {adminRoute ? (
@@ -254,6 +259,7 @@ export default function App() {
                   <fieldset disabled={busy} className="contents">
                     <AdminDashboardView
                       projects={adminProjects}
+                      categories={adminCategories}
                       enquiries={enquiries}
                       onOpenAddProject={() => setEditing(null)}
                       onOpenEditProject={setEditing}
@@ -273,6 +279,7 @@ export default function App() {
                               order: Math.max(-1, ...adminProjects.map((p) => p.order)) + 1,
                             },
                             true,
+                            categoryById(p.category,adminCategories),
                           );
                         })
                       }
@@ -295,7 +302,7 @@ export default function App() {
                     nextOrder={Math.max(-1, ...adminProjects.map((p) => p.order)) + 1}
                     onSave={async (project) => {
                       const previous = editing || null;
-                      await repository.saveProject(project, editing === null);
+                      await repository.saveProject(project, editing === null, categoryById(project.category,adminCategories));
                       if (!previous) return;
                       const removed = removedManagedMediaIds(previous, project);
                       const failures: string[] = [];

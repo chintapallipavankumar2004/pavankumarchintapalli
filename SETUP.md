@@ -77,11 +77,11 @@ Uploaded images use ordinary public Cloudinary delivery URLs. Draft records are 
 - You may also save a direct HTTPS URL ending in `.pdf`. Confirm the file is actually a PDF and is publicly readable. Remote files may open in a browser PDF viewer depending on its download behavior.
 - No real PDF was included in this checkout. Until one is supplied/configured, the control says Resume unavailable. It does not generate a text file or pretend a PDF was downloaded.
 - The provided Cloudinary hero photo remains the default. Persisted settings override it.
-- Identity, contact, SEO, services, skills, process and categories are managed in Firestore. Hero photo, resume URL and availability fields remain in `settings/public`. Run `npm run cms:seed` once after credentials and the admin grant are ready; it creates only missing documents and preserves existing data. Re-running it is safe.
+- Identity, contact, SEO, services, skills, process and project categories are managed in Firestore. Hero photo, resume URL and availability fields remain in `settings/public`. Run `npm run cms:seed` for a new installation. For an existing installation, run `npm run cms:seed-categories`; it creates missing core categories and fills only missing schema fields on legacy category documents. Existing schema-v2 Admin definitions are preserved, so re-running it is safe.
 - Add reviewed projects through Admin. Slugs become document IDs and `/projects/{slug}` URLs; slugs are immutable after creation to keep links stable. Creating a duplicate generates a new slug and always starts as a private draft.
 - Project schema version 2 stores `gallery[]`, `coverImageId`, `mediaIds`, and an allowlisted `categoryFields` map. The read adapter continues to display legacy single-image documents. New writes do not create or render `bannerImage`; an unchanged legacy banner field is retained until a separate reviewed cleanup.
 - Publication only indicates visibility on this portfolio. It does not deploy a client's site. There are no default performance scores, sample project narratives, manufactured delivery dates or fake sync indicators.
-- Reorder controls atomically update display order. Public pages query `status == published`; admin preview URLs are `/admin/preview/{slug}` and require authorization. Unpublishing removes the public route's content. No draft content is placed in page HTML or bundled seed data.
+- Project and category reorder controls use protected server transactions and normalize display order. Public pages query `status == published`; admin preview URLs are `/admin/preview/{slug}` and require authorization. Unpublishing removes the public route's content. No draft content is placed in page HTML or bundled seed data.
 
 ## 6. Vercel deployment and local server execution
 
@@ -99,20 +99,21 @@ Architecture/data map:
 | `src/App.tsx`            | Route handling, auth/grant subscription, separate public/admin project subscriptions, async actions |
 | `src/lib/repository.ts`  | Firestore subscriptions and project/settings/enquiry-status operations                              |
 | `src/lib/firebase.ts`    | Public Firebase config, memory cache, App Check; localhost development-only emulator support        |
-| `server/handlers.ts`     | Authenticated signer and verified/rate-limited enquiry persistence                                  |
+| `server/handlers.ts`     | Protected project/category mutations, authenticated media operations and verified enquiry persistence |
 | `access/admin`           | Single UID grant, server-provisioned, no client writes                                              |
 | `projects/{slug}`        | Project fields, visibility, order, server created/updated timestamps                                |
 | `settings/public`        | Public photo/PDF URLs and optional availability text; admin writes only                             |
 | `enquiries/{uuid}`       | Contact details, message, status, server timestamp, retry-content HMAC; admin reads only            |
 | `enquiryLimits/{ipHmac}` | Server-only rate counters and TTL; no client reads/writes                                           |
 | `siteContent/general` | Public identity, hero, about, contact, footer, section and SEO fields |
-| `categories`, `services`, `skills`, `process` | Published public records and private admin drafts |
+| `categories` | Dynamic project category definitions; published reads, protected server mutations |
+| `services`, `skills`, `process` | Published public records and private admin drafts |
 | `media` | Server-created Cloudinary metadata and ownership |
 | `auditLogs`, `contentRevisions`, `cleanupJobs` | Private admin history, snapshots and retry work |
 
 ### Backup, rollback and cleanup
 
-Export Firestore before a destructive content migration (`gcloud firestore export gs://YOUR_BACKUP_BUCKET/PATH`) and retain the matching Cloudinary asset list. The seed is create-only, so rollback consists of restoring the export or removing only newly seeded documents after verifying their IDs. Code rollback uses the prior Git revision followed by a Vercel redeploy; rules rollback uses the previous checked-in `firestore.rules` and `firebase deploy --only firestore:rules`.
+Export Firestore before a destructive content migration (`gcloud firestore export gs://YOUR_BACKUP_BUCKET/PATH`) and retain the matching Cloudinary asset list. The general seed is create-only. The category seed creates missing definitions and upgrades legacy definitions only by filling absent schema fields; it does not replace schema-v2 Admin changes. Code rollback uses the prior Git revision followed by a Vercel redeploy; rules rollback uses the previous checked-in `firestore.rules` and `firebase deploy --only firestore:rules`.
 
 Failed Cloudinary removals appear in `cleanupJobs`. Confirm project/content references are gone before retrying from an authorized server operation. Keep the job and media metadata until Cloudinary returns `ok` or the exact public ID returns `not found`.
 

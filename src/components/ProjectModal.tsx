@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
-import type { GalleryDisplaySettings, GalleryPresetRatio, Project, ProjectCategory, ProjectGalleryItem } from '../types';
-import { categories, slugify } from '../lib/validation';
+import type { CategoryItem, GalleryDisplaySettings, GalleryPresetRatio, Project, ProjectCategoryFieldDefinition, ProjectGalleryItem } from '../types';
+import { slugify } from '../lib/validation';
 import { MediaField } from './MediaField';
 import {
   GALLERY_PRESET_RATIOS,
-  PROJECT_CATEGORIES,
   galleryAspectRatio,
   galleryRatioLabel,
   normalizeGalleryDisplaySettings,
@@ -14,6 +13,8 @@ import {
   significantDisplayRatioDifference,
 } from '../lib/projects';
 import { deleteMedia } from '../lib/uploads';
+import { categoryById, fallbackCategories } from '../lib/categories';
+import { useContent } from '../lib/content';
 
 interface Props {
   isOpen: boolean;
@@ -29,8 +30,9 @@ const blankProject = (nextOrder: number): Project => normalizeProject({
   gallery: [], coverImageId: '', mediaIds: [], schemaVersion: 2,
 });
 
-const newGalleryItem = (order: number): ProjectGalleryItem => ({
-  id: crypto.randomUUID(), url: '', alt: '', order, ownership: 'external', display: { ratioMode: 'original', fit: 'contain' },
+const categoryRatio=(category:CategoryItem)=>category.mediaConfig.defaultRatio==='original'?16/9:GALLERY_PRESET_RATIOS[category.mediaConfig.defaultRatio];
+const newGalleryItem = (order: number, category:CategoryItem): ProjectGalleryItem => ({
+  id: crypto.randomUUID(), url: '', alt: '', order, ownership: 'external', display: category.mediaConfig.defaultRatio==='original'?{ratioMode:'original',fit:category.mediaConfig.defaultFit}:{ratioMode:'preset',presetRatio:category.mediaConfig.defaultRatio,fit:category.mediaConfig.defaultFit},
 });
 
 const ratioOptions: Array<{ value: string; label: string }> = [
@@ -39,9 +41,9 @@ const ratioOptions: Array<{ value: string; label: string }> = [
   { value: 'custom', label: 'Custom ratio' },
 ];
 
-function GalleryDisplayEditor({ item, imageNumber, category, onChange }: { item: ProjectGalleryItem; imageNumber: number; category: ProjectCategory; onChange: (values: Partial<ProjectGalleryItem>) => void }) {
+function GalleryDisplayEditor({ item, imageNumber, category, onChange }: { item: ProjectGalleryItem; imageNumber: number; category: CategoryItem; onChange: (values: Partial<ProjectGalleryItem>) => void }) {
   const display = normalizeGalleryDisplaySettings(item.display);
-  const fallback = PROJECT_CATEGORIES[category].ratio;
+  const fallback = categoryRatio(category);
   const ratio = galleryAspectRatio(item, fallback);
   const naturalLabel = display.naturalWidth && display.naturalHeight
     ? `${display.naturalWidth} × ${display.naturalHeight} px (${Math.round((display.naturalWidth / display.naturalHeight) * 1000) / 1000}:1)`
@@ -111,8 +113,11 @@ function GalleryDisplayEditor({ item, imageNumber, category, onChange }: { item:
 }
 
 export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder }: Props) {
-  const initial = useMemo(() => projectToEdit ? normalizeProject(projectToEdit as Project & Record<string, unknown>) : blankProject(nextOrder), [projectToEdit, nextOrder]);
-  const [data, setData] = useState<Project>(() => ({ ...initial, gallery: initial.gallery.length ? initial.gallery : [newGalleryItem(0)] }));
+  const {categories:managedCategories}=useContent();
+  const configuredCategories=useMemo(()=>managedCategories.length?managedCategories:fallbackCategories(),[managedCategories]);
+  const initialDefinition=categoryById(projectToEdit?.category||'website',configuredCategories);
+  const initial = useMemo(() => projectToEdit ? normalizeProject(projectToEdit as Project & Record<string, unknown>,initialDefinition) : blankProject(nextOrder), [projectToEdit, nextOrder, initialDefinition]);
+  const [data, setData] = useState<Project>(() => ({ ...initial, gallery: initial.gallery.length ? initial.gallery : [newGalleryItem(0,initialDefinition)] }));
   const [solution, setSolution] = useState(data.solution?.join('\n') || '');
   const [busy, setBusy] = useState(false);
   const [uploads, setUploads] = useState(0);
@@ -146,6 +151,14 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
   const uploadBusy = (value: boolean) => setUploads((count) => Math.max(0, count + (value ? 1 : -1)));
   const updateGallery = (id: string, values: Partial<ProjectGalleryItem>) => setData((previous) => ({ ...previous, gallery: previous.gallery.map((item) => item.id === id ? { ...item, ...values } : item) }));
   const orderedGallery = data.gallery.map((item, order) => ({ ...item, order }));
+  const categoryDefinition=categoryById(data.category,configuredCategories);
+  const selectableCategories=configuredCategories.filter((category)=>category.enabled||category.id===data.category);
+
+  useEffect(()=>{
+    if(projectToEdit||!configuredCategories.length||selectableCategories.some((category)=>category.id===data.category))return;
+    const first=configuredCategories.find((category)=>category.enabled);
+    if(first)setData((previous)=>({...previous,category:first.id,categoryLabel:first.name,tag:first.name,categoryFields:{}}));
+  },[configuredCategories,projectToEdit,data.category,selectableCategories]);
 
   const textField = (key: 'title'|'slug'|'summary'|'role'|'client'|'timeline'|'deliverables'|'fullDescription'|'challenge', label: string, max = 500, multiline = false) => (
     <label className="block space-y-1" key={key}>
@@ -158,15 +171,17 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
     </label>
   );
 
-  const categoryField = (definition: (typeof PROJECT_CATEGORIES)[ProjectCategory]['fields'][number]) => {
-    const value = data.categoryFields[definition.key] || (definition.kind === 'list' ? [] : '');
+  const categoryField = (definition: ProjectCategoryFieldDefinition) => {
+    const arrayType=['list','multiselect'].includes(definition.type);
+    const value = data.categoryFields[definition.key] || (arrayType ? [] : '');
     const setValue = (next: string | string[]) => change('categoryFields', { ...data.categoryFields, [definition.key]: next });
     return <label className="block space-y-1" key={definition.key}>
       <span className="font-semibold">{definition.label}</span>
-      {definition.kind === 'textarea' ? <textarea rows={3} maxLength={2000} value={String(value)} onChange={(event) => setValue(event.target.value)} className="w-full p-3 rounded-lg border border-[#c8c4d8]" /> :
-       definition.kind === 'select' ? <select value={String(value)} onChange={(event) => setValue(event.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8]"><option value="">Choose...</option>{definition.options?.map((option) => <option key={option}>{option}</option>)}</select> :
-       definition.kind === 'list' ? <textarea rows={2} value={Array.isArray(value) ? value.join('\n') : String(value)} onChange={(event) => setValue(event.target.value.split('\n').map((item) => item.trim()).filter(Boolean).slice(0, definition.max || 30))} placeholder="One item per line" className="w-full p-3 rounded-lg border border-[#c8c4d8]" /> :
-       <input type={definition.kind === 'url' ? 'url' : 'text'} maxLength={definition.kind === 'url' ? 2048 : 500} value={String(value)} onChange={(event) => setValue(event.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8]" />}
+      {definition.type === 'textarea' ? <textarea required={definition.required} placeholder={definition.placeholder} rows={3} maxLength={2000} value={String(value)} onChange={(event) => setValue(event.target.value)} className="w-full p-3 rounded-lg border border-[#c8c4d8]" /> :
+       definition.type === 'select' ? <select required={definition.required} value={String(value)} onChange={(event) => setValue(event.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8]"><option value="">Choose...</option>{definition.options?.map((option) => <option key={option}>{option}</option>)}</select> :
+       definition.type === 'multiselect' ? <select multiple required={definition.required} value={Array.isArray(value)?value:[]} onChange={(event)=>setValue([...event.target.selectedOptions].map((option)=>option.value))} className="w-full min-h-24 px-3 rounded-lg border border-[#c8c4d8]">{definition.options?.map((option)=><option key={option}>{option}</option>)}</select> :
+       definition.type === 'list' ? <textarea required={definition.required} rows={2} value={Array.isArray(value) ? value.join('\n') : String(value)} onChange={(event) => setValue(event.target.value.split('\n').map((item) => item.trim()).filter(Boolean).slice(0, 30))} placeholder={definition.placeholder||'One item per line'} className="w-full p-3 rounded-lg border border-[#c8c4d8]" /> :
+       <input required={definition.required} placeholder={definition.placeholder} type={definition.type === 'url' ? 'url' : 'text'} maxLength={definition.type === 'url' ? 2048 : 500} value={String(value)} onChange={(event) => setValue(event.target.value)} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8]" />}
     </label>;
   };
 
@@ -180,7 +195,7 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
         event.preventDefault(); if (busy || uploads) return; setBusy(true); setError('');
         try {
           const gallery = orderedGallery.filter((item) => item.url.trim());
-          const project = normalizeProject({ ...data, id: data.slug, title: data.title.trim(), summary: data.summary.trim(), categoryLabel: PROJECT_CATEGORIES[data.category].label, tag: PROJECT_CATEGORIES[data.category].label, categoryFields: sanitizeCategoryFields(data.category, data.categoryFields), gallery, coverImageId: gallery.some((item) => item.id === data.coverImageId) ? data.coverImageId : gallery[0]?.id || '', solution: solution.split('\n').map((item) => item.trim()).filter(Boolean).slice(0, 30) } as Project & Record<string, unknown>);
+          const project = normalizeProject({ ...data, id: data.slug, title: data.title.trim(), summary: data.summary.trim(), categoryLabel: categoryDefinition.name, tag: categoryDefinition.name, categoryFields: sanitizeCategoryFields(categoryDefinition, data.categoryFields), gallery, coverImageId: gallery.some((item) => item.id === data.coverImageId) ? data.coverImageId : gallery[0]?.id || '', solution: solution.split('\n').map((item) => item.trim()).filter(Boolean).slice(0, 30) } as Project & Record<string, unknown>, categoryDefinition);
           await onSave(project);
           await cleanupUploads(new Set(project.mediaIds));
           committed.current = true;
@@ -191,11 +206,12 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
         <fieldset disabled={busy} className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">{textField('title','Project title',120)}{textField('slug','URL slug (fixed after creation)',80)}</div>
           <label className="block space-y-1"><span className="font-semibold">Category</span><select value={data.category} onChange={(event) => {
-            const category = event.target.value as ProjectCategory;
+            const category = event.target.value;
             if (category === data.category) return;
             if (Object.keys(data.categoryFields).length && !window.confirm('Changing category clears fields that do not apply. Common project details and gallery images will be kept. Continue?')) return;
-            setData((previous) => ({ ...previous, category, categoryLabel: PROJECT_CATEGORIES[category].label, tag: PROJECT_CATEGORIES[category].label, categoryFields: sanitizeCategoryFields(category, previous.categoryFields) }));
-          }} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8]">{categories.map((category) => <option key={category} value={category}>{PROJECT_CATEGORIES[category].label}</option>)}</select></label>
+            const definition = categoryById(category, configuredCategories);
+            setData((previous) => ({ ...previous, category, categoryLabel: definition.name, tag: definition.name, categoryFields: sanitizeCategoryFields(definition, previous.categoryFields) }));
+          }} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8]">{selectableCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
           {textField('summary','Short summary',600)}
           {textField('fullDescription','Full description',10000,true)}
           <div className="grid sm:grid-cols-2 gap-4">{textField('client','Client',200)}{textField('role','Role',200)}{textField('timeline','Timeline',200)}{textField('deliverables','Deliverables',1000)}</div>
@@ -203,7 +219,7 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
           <label className="block space-y-1"><span className="font-semibold">Solution (one item per line)</span><textarea rows={3} maxLength={10000} value={solution} onChange={(event) => setSolution(event.target.value)} className="w-full p-3 rounded-lg border border-[#c8c4d8]" /></label>
 
           <section aria-labelledby="gallery-title" className="space-y-3 border-t border-[#c8c4d8]/60 pt-4">
-            <div className="flex items-center justify-between gap-3"><div><h4 id="gallery-title" className="font-bold text-base">Gallery</h4><p className="text-xs text-[#474555]">1-5 images. {PROJECT_CATEGORIES[data.category].guidance}; this is guidance, not a reason to stretch an image.</p></div><button type="button" disabled={data.gallery.length >= 5} onClick={() => setData((previous) => ({ ...previous, gallery: [...previous.gallery, newGalleryItem(previous.gallery.length)] }))} className="min-h-11 px-3 rounded-lg border border-[#c8c4d8] flex items-center gap-2 disabled:opacity-40"><Plus className="w-4 h-4" /> Add image</button></div>
+            <div className="flex items-center justify-between gap-3"><div><h4 id="gallery-title" className="font-bold text-base">Gallery</h4><p className="text-xs text-[#474555]">1-5 images. {categoryDefinition.mediaConfig.guidance}; this is guidance, not a reason to stretch an image.</p></div><button type="button" disabled={data.gallery.length >= 5} onClick={() => setData((previous) => ({ ...previous, gallery: [...previous.gallery, newGalleryItem(previous.gallery.length, categoryDefinition)] }))} className="min-h-11 px-3 rounded-lg border border-[#c8c4d8] flex items-center gap-2 disabled:opacity-40"><Plus className="w-4 h-4" /> Add image</button></div>
             {orderedGallery.map((item, index) => {
               const isCover = (data.coverImageId || orderedGallery[0]?.id) === item.id;
               return <article key={item.id} className={`rounded-xl border bg-[#f9f9ff] p-3 space-y-3 ${isCover ? 'border-[#5b4cf0] ring-2 ring-[#5b4cf0]/15' : 'border-[#c8c4d8]'}`}>
@@ -219,12 +235,12 @@ export function ProjectModal({ isOpen, onClose, onSave, projectToEdit, nextOrder
                 updateGallery(item.id, { url: asset.secureUrl, mediaId: asset.id, publicId: asset.publicId, ownership: 'cloudinary-managed', display: { ...display, ...(asset.width && asset.height ? { naturalWidth: asset.width, naturalHeight: asset.height } : {}) } });
               }} onBusy={uploadBusy} />
               <div className="grid sm:grid-cols-2 gap-3"><label className="space-y-1"><span className="font-semibold">Alt text</span><input required maxLength={300} value={item.alt} onChange={(event) => updateGallery(item.id, { alt: event.target.value })} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8] bg-white" /></label><label className="space-y-1"><span className="font-semibold">Caption (optional)</span><input maxLength={500} value={item.caption || ''} onChange={(event) => updateGallery(item.id, { caption: event.target.value })} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8] bg-white" /></label></div>
-              <GalleryDisplayEditor item={item} imageNumber={index + 1} category={data.category} onChange={(values) => updateGallery(item.id, values)} />
+              <GalleryDisplayEditor item={item} imageNumber={index + 1} category={categoryDefinition} onChange={(values) => updateGallery(item.id, values)} />
               <label className="inline-flex items-center gap-2 font-semibold"><input type="radio" name="cover" checked={isCover} onChange={() => change('coverImageId', item.id)} /> Use as Work-section cover</label>
             </article>})}
           </section>
 
-          <section className="space-y-3 border-t border-[#c8c4d8]/60 pt-4"><h4 className="font-bold text-base">{PROJECT_CATEGORIES[data.category].label} details</h4><div className="grid sm:grid-cols-2 gap-4">{PROJECT_CATEGORIES[data.category].fields.map(categoryField)}</div></section>
+          <section className="space-y-3 border-t border-[#c8c4d8]/60 pt-4"><h4 className="font-bold text-base">{categoryDefinition.name} details</h4><div className="grid sm:grid-cols-2 gap-4">{categoryDefinition.fields.map(categoryField)}</div></section>
           <label className="block space-y-1"><span className="font-semibold">Visibility</span><select value={data.status} onChange={(event) => change('status', event.target.value as Project['status'])} className="w-full h-10 px-3 rounded-lg border border-[#c8c4d8]"><option value="draft">Private draft</option><option value="published">Published publicly</option></select></label>
           {error && <p role="alert" className="text-red-700">{error}</p>}
           <div className="border-t border-[#c8c4d8]/40 pt-4 flex justify-end gap-3"><button type="button" disabled={uploads > 0} onClick={requestClose} className="min-h-11 px-5 rounded-lg border border-[#c8c4d8]">Cancel</button><button disabled={uploads > 0} className="min-h-11 px-6 rounded-lg bg-[#5b4cf0] text-white font-semibold disabled:opacity-50">{busy ? 'Saving...' : 'Save Project'}</button></div>

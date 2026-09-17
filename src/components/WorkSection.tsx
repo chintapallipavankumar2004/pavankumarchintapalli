@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
-import type { Project } from '../types';
+import type { CategoryItem, Project } from '../types';
 import { useContent } from '../lib/content';
 import {
-  PROJECT_CATEGORIES,
   galleryAspectRatio,
   normalizeGalleryDisplaySettings,
   projectCover,
   projectCta,
 } from '../lib/projects';
+import { categoryAspectRatio, categoryById } from '../lib/categories';
 
 interface WorkSectionProps {
   projects: Project[];
@@ -16,7 +16,7 @@ interface WorkSectionProps {
   onViewLiveUrl?: (url: string) => void;
 }
 
-function WorkCover({ project }: { project: Project }) {
+function WorkCover({ project, category }: { project: Project; category: CategoryItem }) {
   const cover = projectCover(project);
   const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
 
@@ -24,7 +24,7 @@ function WorkCover({ project }: { project: Project }) {
   if (!cover) return null;
 
   const display = normalizeGalleryDisplaySettings(cover.display);
-  const fallback = PROJECT_CATEGORIES[project.category].ratio;
+  const fallback = categoryAspectRatio(category);
   const hasStoredOriginalRatio = !!(display.naturalWidth && display.naturalHeight);
   const ratio = display.ratioMode === 'original' && !hasStoredOriginalRatio && loadedRatio
     ? loadedRatio
@@ -68,10 +68,10 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
   const categories = useMemo(() => [
     { id: 'all', label: 'All', count: publishedProjects.length },
     ...managedCategories
-      .map((category) => ({ id: category.id, label: category.name, count: publishedProjects.filter((project) => project.category === category.id || project.category === category.id.replace(/s$/, '')).length }))
+      .map((category) => ({ id: category.id, label: category.name, count: publishedProjects.filter((project) => project.category === category.id).length }))
       .filter((category) => category.count > 0),
   ], [managedCategories, publishedProjects]);
-  const filteredProjects = useMemo(() => publishedProjects.filter((project) => activeCategory === 'all' || project.category === activeCategory || project.category === activeCategory.replace(/s$/, '')), [activeCategory, publishedProjects]);
+  const filteredProjects = useMemo(() => publishedProjects.filter((project) => activeCategory === 'all' || project.category === activeCategory), [activeCategory, publishedProjects]);
 
   const updateArrows = useCallback(() => {
     const node = carousel.current;
@@ -156,10 +156,11 @@ export const WorkSection: React.FC<WorkSectionProps> = ({ projects, onSelectProj
           className="custom-scrollbar flex max-w-full snap-x snap-mandatory items-start gap-4 overflow-x-auto overscroll-x-contain pb-4 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#5b4cf0]"
         >
           {filteredProjects.map((project) => {
-            const cta = projectCta(project);
+            const definition = categoryById(project.category, managedCategories);
+            const cta = projectCta(project, definition);
             return (
               <article key={project.id} id={`project-card-${project.id}`} data-work-card className="w-full shrink-0 snap-start overflow-hidden rounded-2xl border border-[#c8c4d8] bg-white p-3 shadow-sm transition-shadow duration-300 hover:shadow-md sm:w-[calc((100%-1rem)/2)] lg:w-[calc((100%-2rem)/3)]">
-                <WorkCover project={project} />
+                <WorkCover project={project} category={definition} />
                 <div className="flex flex-col gap-3 px-1 pb-1 pt-4">
                   <span className="self-start rounded-full bg-[#e9edff] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#422cd8]">{project.categoryLabel}</span>
                   <h3 className="line-clamp-2 text-xl font-bold leading-tight text-[#141b2b]">{project.title}</h3>

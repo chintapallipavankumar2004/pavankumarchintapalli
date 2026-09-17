@@ -1,4 +1,3 @@
-export const categories = ['website', 'webapp', 'poster', 'logo', 'automation', 'app'] as const;
 export const services = ['website', 'webapp', 'branding', 'automation', 'consulting'] as const;
 export const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export function slugify(value: string) {
